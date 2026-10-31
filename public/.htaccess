@@ -1,0 +1,47 @@
+# Cadê o eleito? — configuração para hospedagem compartilhada Apache.
+Options -Indexes
+DirectoryIndex index.html
+ServerSignature Off
+
+# Tipos dos arquivos. Os dados (.bin) já vêm comprimidos (gzip); o navegador os descompacta.
+AddType application/octet-stream .bin
+AddType application/manifest+json .webmanifest
+AddType text/javascript .js
+AddCharset utf-8 .html .css .js .webmanifest .txt
+
+# Bloqueia arquivos ocultos (.htaccess, .git etc.).
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+
+# Compressão de HTML, CSS, JS e SVG (os .bin já são comprimidos).
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript image/svg+xml application/manifest+json text/plain
+  SetEnvIfNoCase Request_URI \.bin$ no-gzip
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Cross-Origin-Resource-Policy "same-origin"
+  # Dados versionados na URL (?v=...): cache longo. Página, scripts e estilos: sempre revalidados.
+  <FilesMatch "\.bin$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "\.(html|js|css|webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(png|svg)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>
+
+# Força HTTPS e HSTS. Descomente depois que o certificado HTTPS estiver ativo na hospedagem.
+# RewriteEngine On
+# RewriteCond %{HTTPS} !=on
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS

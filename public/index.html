@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadê o eleito? · Eleições 2026 · Resultados oficiais do TSE</title>
+  <meta name="description" content="Consulte os resultados oficiais das Eleições Gerais 2026 por candidato ou cargo, em cada estado, município, zona, bairro, local de votação e seção eleitoral. Dados do TSE.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0c0e12">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:title" content="Cadê o eleito? · Veja quem foi eleito na sua cidade e região">
+  <meta property="og:description" content="Votos por candidato e cargo em cada estado, município, zona, bairro, local de votação e seção. Dados do TSE.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="robots" content="index, follow">
+  <!-- SITE_URL: preenchido por "npm run gerar" quando BR_ELEICOES_SITE_URL é informado (links de compartilhamento precisam de URL absoluta). -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="stylesheet" href="css/app.css">
+  <!-- Aplica o tema salvo (claro/escuro) antes de desenhar a página, sem piscar. -->
+  <script src="js/tema.js"></script>
+  <!-- Baixa todos os módulos em paralelo (sem esperar um importar o outro). -->
+  <link rel="modulepreload" href="js/dom.js">
+  <link rel="modulepreload" href="js/calculo.js">
+  <link rel="modulepreload" href="js/api.js">
+  <link rel="modulepreload" href="js/estado.js">
+  <link rel="modulepreload" href="js/grafico.js">
+  <link rel="modulepreload" href="js/filtros.js">
+  <link rel="modulepreload" href="js/paginas/comum.js">
+  <link rel="modulepreload" href="js/paginas/resultados.js">
+  <link rel="modulepreload" href="js/paginas/graficos.js">
+  <link rel="modulepreload" href="js/paginas/mapa.js">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <a class="pular" href="#principal">Pular para o conteúdo</a>
+
+  <header class="topo">
+    <div class="topo-interno">
+      <nav class="navegacao" aria-label="Páginas">
+        <a data-pagina="resultados" href="#/resultados">Resultados</a>
+        <a data-pagina="graficos" href="#/graficos">Gráficos</a>
+        <a data-pagina="mapa" href="#/mapa">Mapa</a>
+        <a data-pagina="sobre" href="#/sobre">Sobre</a>
+      </nav>
+      <button type="button" id="tema-botao" class="tema-botao" aria-label="Ativar tema claro" title="Ativar tema claro">
+        <svg class="icone icone-lua" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <svg class="icone icone-sol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="heroi">
+    <div class="heroi-interno">
+      <p class="heroi-sobre">Eleições Gerais · 4 e 25 de outubro de 2026</p>
+      <h1 class="titulo-marca">Cadê o eleito?
+        <!-- Logo "lupa no mapa": procurar o eleito da sua região. O furo do alfinete é vazado (evenodd) para mostrar o fundo. -->
+        <svg class="titulo-logo" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="27" cy="27" r="17" class="lg-s1" stroke-width="6"/>
+          <path d="M40 40 55 55" class="lg-s1" stroke-width="8" stroke-linecap="round"/>
+          <path d="M27 15.5a8 8 0 0 1 8 8c0 6.2-8 13.5-8 13.5s-8-7.3-8-13.5a8 8 0 0 1 8-8zM27 20.5a3 3 0 1 0 0 6a3 3 0 1 0 0-6z" fill-rule="evenodd" class="lg-f2"/>
+        </svg>
+      </h1>
+    </div>
+  </div>
+
+  <main id="principal" class="principal" tabindex="-1">
+    <noscript>
+      <div class="aviso aviso-erro"><p>Este site precisa de JavaScript para calcular os resultados no seu navegador. Ative o JavaScript e recarregue a página.</p></div>
+    </noscript>
+    <section id="filtros" class="filtros cartao" aria-label="Filtros"></section>
+
+    <section id="pagina-resultados" class="pagina" aria-label="Resultados"></section>
+    <section id="pagina-graficos" class="pagina" aria-label="Gráficos" hidden></section>
+    <section id="pagina-mapa" class="pagina" aria-label="Mapa" hidden></section>
+
+    <section id="pagina-sobre" class="pagina" aria-label="Sobre os dados" hidden>
+      <div class="pagina-conteudo sobre">
+        <article class="cartao">
+          <h2>Sobre os dados</h2>
+          <p>Este é um painel <strong>independente</strong> que reúne e organiza os dados públicos do Tribunal Superior Eleitoral (TSE). Ele não é um site oficial do TSE. Nenhum voto é estimado: todos os números vêm diretamente dos arquivos oficiais.</p>
+
+          <h3>De onde vêm os números</h3>
+          <dl class="fontes-lista">
+            <dt>Brasil, estado, município e zona</dt>
+            <dd>Arquivos oficiais de divulgação de resultados do TSE (padrão EA20), em <code>resultados.tse.jus.br</code>. São os mesmos arquivos usados pelo aplicativo Resultados do TSE.</dd>
+            <dt>Bairro, local de votação e seção</dt>
+            <dd>Conjunto de dados abertos <em>Votação por seção eleitoral 2026</em> (<code>cdn.tse.jus.br</code>). O bairro é o cadastrado pelo TSE para cada <em>local de votação</em> (conjunto <em>Eleitorado por local de votação 2026</em>); o resultado do bairro é a soma exata das seções dos locais de votação daquele bairro.</dd>
+            <dt>Busca de candidatos</dt>
+            <dd>Conjunto <em>Candidatos 2026</em> do TSE (nome de urna, nome completo, número, partido e situação).</dd>
+            <dt>Mapa</dt>
+            <dd>Malhas territoriais do IBGE e o conjunto <em>Votação nominal por partido e município/zona 2026</em> do TSE.</dd>
+          </dl>
+          <p id="sobre-geracao" class="recorte-sub"></p>
+
+          <h3>Como ler os resultados</h3>
+          <ul>
+            <li><strong>Votos válidos</strong> são os votos nominais (no candidato) mais os votos de legenda (no partido), sem brancos e nulos. Os percentuais são calculados sobre os votos válidos, como faz o TSE.</li>
+            <li>Nos cargos proporcionais (Deputados), o total do partido inclui os votos de legenda.</li>
+            <li>Votos dados a números sem candidato na urna são <em>nulos técnicos</em> e aparecem somados aos nulos, como na totalização oficial.</li>
+            <li>Seções agregadas são apuradas na seção principal; por isso algumas seções não aparecem isoladamente.</li>
+            <li>A soma de todas as seções de um município confere exatamente com o total oficial divulgado pelo TSE.</li>
+          </ul>
+
+          <h3>Como o site funciona</h3>
+          <p>Os arquivos oficiais do TSE foram processados uma única vez, na publicação do site, e divididos em pequenos arquivos por município e zona eleitoral. Ao escolher um bairro, local ou seção, o seu navegador baixa só os arquivos daquela zona e soma os votos das seções na hora, em milissegundos. Nenhum dado pessoal é coletado e não há rastreamento.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    <div class="rodape-interno">
+      <p>Cadê o eleito? · painel independente com dados abertos do <abbr title="Tribunal Superior Eleitoral">TSE</abbr> e malhas do <abbr title="Instituto Brasileiro de Geografia e Estatística">IBGE</abbr>.</p>
+      <p>Não é um site oficial da Justiça Eleitoral.</p>
+    </div>
+  </footer>
+</body>
+</html>

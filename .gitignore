@@ -1,0 +1,5 @@
+.cache-brazil-eleicoes-2026/
+dist/
+.teste/
+node_modules/
+*.log
