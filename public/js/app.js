@@ -11,12 +11,11 @@ if (window.top !== window.self) {
 import { h, $, limpar, icone } from './dom.js';
 import { api } from './api.js';
 import { estado, contexto, aoMudar, iniciarEstado, urlPara, definir } from './estado.js';
-import { criarFiltros } from './filtros.js';
+import { criarFiltros, normalizarEstado } from './filtros.js';
 import { criarPaginaResultados } from './paginas/resultados.js';
-import { criarPaginaGraficos } from './paginas/graficos.js';
 import { criarPaginaMapa } from './paginas/mapa.js';
 
-const TITULOS = { resultados: 'Resultados', graficos: 'Gráficos', mapa: 'Mapa', sobre: 'Sobre os dados' };
+const TITULOS = { resultados: 'Resultados', mapa: 'Mapa', sobre: 'Sobre os dados' };
 const paginas = {};
 
 function atualizarNavegacao() {
@@ -57,11 +56,19 @@ async function iniciar() {
   await restaurarCandidato();
   const filtros = criarFiltros($('#filtros'));
   paginas.resultados = criarPaginaResultados($('#pagina-resultados'));
-  paginas.graficos = criarPaginaGraficos($('#pagina-graficos'));
   paginas.mapa = criarPaginaMapa($('#pagina-mapa'));
   await filtros.iniciar();
+  // Logo do topo: página inicial sem nenhum filtro (o endereço sem parâmetros zera tudo).
+  $('#inicio').addEventListener('click', e => {
+    e.preventDefault();
+    contexto.candidato = null;
+    if (location.hash !== '#/resultados') location.hash = '#/resultados';
+    window.scrollTo({ top: 0 });
+    $('#cand-busca')?.focus({ preventScroll: true });
+  });
   aoMudar(async mudou => {
-    if (mudou.has('cand')) { await restaurarCandidato(); filtros.render(); }
+    // O cargo e o estado vêm do candidato: depois de carregá-lo, aplica as regras de novo.
+    if (mudou.has('cand')) { await restaurarCandidato(); normalizarEstado(); filtros.render(); }
     renderizarPagina();
     if (mudou.has('pagina')) window.scrollTo({ top: 0 });
   });

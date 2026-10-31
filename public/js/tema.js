@@ -20,6 +20,28 @@
     }
   }
 
+  // Troca animada: o novo tema "abre" em círculo a partir do botão (View Transitions). Sem
+  // suporte, as cores mudam com uma transição suave. Quem pede menos movimento troca na hora.
+  function trocarAnimado(novo, botao) {
+    var menosMovimento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (menosMovimento) { aplicar(novo); return; }
+    if (document.startViewTransition) {
+      var r = botao.getBoundingClientRect();
+      var x = r.left + r.width / 2, y = r.top + r.height / 2;
+      var raio = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+      var transicao = document.startViewTransition(function () { aplicar(novo); });
+      transicao.ready.then(function () {
+        raiz.animate(
+          { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + raio + 'px at ' + x + 'px ' + y + 'px)'] },
+          { duration: 600, easing: 'cubic-bezier(.4, 0, .2, 1)', pseudoElement: '::view-transition-new(root)' });
+      }).catch(function () { /* transição cancelada: o tema já foi aplicado */ });
+      return;
+    }
+    raiz.classList.add('tema-mudando');
+    aplicar(novo);
+    setTimeout(function () { raiz.classList.remove('tema-mudando'); }, 500);
+  }
+
   var salvo = null;
   try { salvo = localStorage.getItem(CHAVE); } catch (e) { /* armazenamento bloqueado */ }
   aplicar(salvo === 'claro' ? 'claro' : 'escuro');
@@ -30,8 +52,8 @@
     if (!botao) return;
     botao.addEventListener('click', function () {
       var novo = atual() === 'claro' ? 'escuro' : 'claro';
-      aplicar(novo);
       try { localStorage.setItem(CHAVE, novo); } catch (e) { /* vale só nesta visita */ }
+      trocarAnimado(novo, botao);
     });
   });
 })();

@@ -2,9 +2,8 @@
 
 Site para consultar os resultados oficiais das **Eleições Gerais de 2026** (1º turno em 4/10 e 2º turno em 25/10) com dados reais do **Tribunal Superior Eleitoral (TSE)**.
 
-- **Resultados**: busca por candidato (nome ou número) ou por cargo, com filtro **Estado › Município › Zona › Bairro › Local de votação › Seção**, e os votos daquele recorte.
-- **Gráficos**: os 5 candidatos e os 5 partidos mais votados no recorte.
-- **Mapa**: mapa do Brasil por estado e de cada estado por município, colorido pelo partido mais votado. Ao clicar em um município, o filtro muda para ele e o resultado aparece ao lado.
+- **Resultados** (página inicial): tudo começa pela busca do candidato (nome ou número); o cargo vem dele. Depois de escolhido, aparecem o turno e o filtro **Estado › Município › Zona › Bairro › Local de votação › Seção**. A busca mostra a **foto oficial** de cada candidato ao lado do número. Abaixo, um **cartão do candidato** com a foto, os votos, o % dos válidos e a posição no local pesquisado, pronto para compartilhar: X, WhatsApp, Facebook, copiar link e **imagem 1080 × 1080** para o Instagram (gerada no navegador). Abaixo do cartão, o mapa de densidade e a fonte dos dados.
+- **Mapa**: densidade de votos do candidato buscado, em três níveis de zoom: **Brasil** (por estado, para Presidente) › **Estado** (por município) › **Município**, dividido em **zonas eleitorais** (com o número de cada zona; clique para ver os bairros da zona) ou em **áreas de locais de votação** (clique para ver bairro, endereço e seções). O TSE não publica limites de zonas ou seções: cada ponto do município é atribuído ao local de votação mais próximo (diagrama de Voronoi a partir da latitude/longitude dos locais), e a zona é a união das áreas dos seus locais. Cada área ou local é colorido pelo % dos votos válidos que o candidato teve ali, numa escala de 9 tons: quanto maior o percentual, mais forte a cor. Clicar em um município aproxima o mapa; clicar em uma zona ou local aplica o filtro. O logo no canto superior esquerdo volta ao início com todos os filtros limpos.
 - **Sobre**: de onde vêm os dados e como ler os números.
 
 ## Como funciona
@@ -34,7 +33,7 @@ Nenhum voto é estimado. A soma das seções de cada município confere exatamen
 
 ### Requisitos
 
-- **Node.js 20 ou mais novo** (recomendado: 22 LTS). Não há dependências: **não é preciso rodar `npm install`**.
+- **Node.js 22 ou mais novo** (LTS). Não há dependências: **não é preciso rodar `npm install`**.
 - Internet para baixar os dados do TSE e do IBGE durante a geração.
 
 ### Passo a passo
@@ -77,7 +76,7 @@ Referências medidas para a primeira geração (o tempo depende da conexão):
 | SP | 771 MB | cerca de 90 min nesta conexão |
 | Presidente (todas as UFs) | 242 MB | cerca de 2,5 min |
 
-O site completo (`todos`) baixa cerca de 3,5 GB do TSE na primeira vez. Com AC, PE e SP detalhados, o site gerado tem cerca de 3.300 arquivos e 43 MB. A estimativa para o país inteiro é de 150 a 200 MB e **cerca de 18 mil arquivos**, abaixo do limite de 20 mil arquivos do Cloudflare Pages e de 1 GB do GitHub Pages.
+O site completo (`todos`) baixa cerca de 3,5 GB do TSE na primeira vez. Com AC, PE e SP detalhados, o site gerado tem cerca de 3.300 arquivos e 43 MB. O site completo (27 UFs) tem **cerca de 50 mil arquivos** (20 mil são fotos de ~5 KB) e uns 340 MB: cabe no GitHub Pages (limite de 1 GB) e no Netlify, mas passa do limite de 20 mil arquivos do Cloudflare Pages.
 
 #### Endereço do site (recomendado)
 
@@ -107,7 +106,7 @@ npm run test:e2e  # navegador (Chrome/Edge sem janela): 53 cenários de uso, seg
 ```
 
 - **`npm test`** confere, nas 27 UFs, em todos os cargos e turnos, que a soma dos municípios é igual ao resultado oficial do TSE; que zonas, bairros e locais somam exatamente o município; que o Brasil fecha com as UFs; que o cadastro de candidatos não traz CPF/e-mail; que parâmetros maliciosos (`../`, `%00`, HTML) são recusados; e que `_headers`, `.htaccess`, `<meta>` e `server.js` usam a mesma CSP.
-- **`npm run test:e2e`** abre o site e confere busca por teclado, filtros, mapa, gráficos, tema claro/escuro, links adulterados e injeção de HTML; e, em 4 larguras de tela × 2 temas, rolagem horizontal, contraste WCAG AA, nomes acessíveis e ids repetidos. Para guardar capturas de tela: `E2E_FOTOS=pasta npm run test:e2e`. Chrome em outro caminho: `CHROME=caminho npm run test:e2e`.
+- **`npm run test:e2e`** abre o site e confere busca por teclado, filtros, cartão do candidato, mapa de densidade, tema claro/escuro, links adulterados e injeção de HTML; e, em 4 larguras de tela × 2 temas, rolagem horizontal, contraste WCAG AA, nomes acessíveis e ids repetidos. Para guardar capturas de tela: `E2E_FOTOS=pasta npm run test:e2e`. Chrome em outro caminho: `CHROME=caminho npm run test:e2e`.
 
 O GitHub Actions roda `npm test` antes de publicar: se algum teste falhar, o site não é publicado.
 
@@ -152,8 +151,8 @@ public/                 Código do site (copiado para dist/ na geração)
   js/api.js             Camada de dados: lê dist/dados/ e calcula cada recorte
   js/calculo.js         Regras de soma (usadas também pelo gerador e pelo verificador)
   js/filtros.js         Barra de filtros e busca de candidatos
-  js/grafico.js         Gráfico de barras
-  js/paginas/           Páginas Resultados, Gráficos e Mapa
+  js/grafico.js         Gráfico de barras (painel do mapa) e tooltip
+  js/paginas/           Páginas Resultados e Mapa
   _headers, .htaccess   Cabeçalhos de segurança para Netlify/Cloudflare e Apache
 lib/                    Usado só na geração: acesso ao TSE/IBGE, leitura de ZIP/CSV e índices
 scripts/gerar.js        Gera dist/
@@ -171,11 +170,13 @@ legado/v2.9/            Versão anterior do projeto, mantida só para referênci
 | `br.bin` | Presidente no Brasil |
 | `uf/{UF}.bin` | Municípios e zonas da UF |
 | `uf/{UF}/{turno}-{cargo}.bin` | Resultado oficial da UF e dados dos candidatos daquele cargo |
-| `m/{UF}/{município}.bin` | Locais de votação (nome, endereço, bairro, seções, eleitorado) e totais do município |
+| `m/{UF}/{município}.bin` | Locais de votação (nome, endereço, bairro, seções, eleitorado e posição no mapa) e totais do município |
 | `s/{UF}/{município}/{zona}.bin` | Votos por seção: Presidente, Governador e Senador, mais o eleitorado de cada seção |
 | `s/{UF}/{município}/{zona}-p.bin` | Votos por seção: Deputados, mais o eleitorado de cada seção |
 | `mapa/brasil.bin`, `mapa/{UF}.bin` | Contornos do IBGE já convertidos para SVG |
-| `mapa/lideres/{UF ou BR}/{turno}-{cargo}.bin` | Partido líder e três mais votados por área (tooltip do mapa) |
+| `mapa/l/{UF}/{município}.bin`, `-p.bin` | Votos válidos e votos de cada candidato por local de votação (majoritários / Deputados): mapa do município |
+| `mapa/votos/{UF ou BR}/{turno}-{cargo}.bin` | Votos válidos e votos de cada candidato por município (ou por UF, para Presidente no mapa do Brasil): mapa de densidade |
+| `../img/c/{id}.jpg` | Foto oficial do candidato (TSE), ~5 KB cada |
 | `candidatos.bin` | Índice da busca de candidatos |
 
 ## Fontes de dados (oficiais e públicas)
@@ -186,8 +187,8 @@ legado/v2.9/            Versão anterior do projeto, mantida só para referênci
 | Municípios e zonas | TSE, EA12: `.../ele2026/6259/config/mun-e006259-cm.json` |
 | Votos por seção (município, zona, bairro, local e seção) | TSE, dados abertos: `cdn.tse.jus.br/estatistica/sead/odsele/votacao_secao/votacao_secao_2026_{UF\|BR}.zip` |
 | Bairros, locais de votação e eleitorado | TSE, dados abertos: `.../eleitorado_locais_votacao/eleitorado_local_votacao_2026.zip` |
+| Fotos dos candidatos | TSE, dados abertos: `cdn.tse.jus.br/estatistica/sead/eleicoes/eleicoes2026/fotos/foto_cand2026_{UF|BR}_div.zip` |
 | Busca de candidatos | TSE, dados abertos: `.../consulta_cand/consulta_cand_2026.zip` (só nome, número, partido, cargo, UF e situação) |
-| Partido líder no mapa | TSE, dados abertos: `.../votacao_partido_munzona/votacao_partido_munzona_2026.zip` |
 | Contornos do mapa | IBGE, API de malhas |
 
 ## Segurança

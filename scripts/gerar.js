@@ -17,8 +17,10 @@
 //   dados/s/{UF}/{mun}/{zona}.bin      votos por seção: Presidente, Governador e Senador (+ eleitores por seção)
 //   dados/s/{UF}/{mun}/{zona}-p.bin    votos por seção: Deputados (+ eleitores por seção)
 //   dados/candidatos.bin               busca de candidatos
+//   img/c/{id}.jpg                     foto do candidato (TSE)
 //   dados/mapa/brasil.bin, mapa/{UF}.bin          geometria (IBGE) em caminhos SVG
-//   dados/mapa/lideres/{UF|BR}/{turno}-{cargo}.bin partido líder e 3 mais votados por área (tooltip)
+//   dados/mapa/votos/{UF|BR}/{turno}-{cargo}.bin  votos de cada candidato por área (mapa de densidade)
+//   dados/mapa/l/{UF}/{mun}.bin, {mun}-p.bin      votos de cada candidato por local de votação (mapa do município)
 
 const fs = require('fs');
 const path = require('path');
@@ -29,6 +31,8 @@ const tse = require('../lib/tse');
 const secoes = require('../lib/secoes');
 const locais = require('../lib/locais');
 const mapa = require('../lib/mapa');
+const fotos = require('../lib/fotos');
+const { dividirMunicipio } = require('../lib/voronoi');
 const { garantirDir } = require('../lib/util');
 
 const DIST = path.join(cfg.ROOT, 'dist');
@@ -57,8 +61,13 @@ function copiarDir(origem, destino) {
   }
 }
 
-// [nome, partido, % dos válidos com 1 casa] dos três primeiros.
-const top3 = candidatos => candidatos.slice(0, 3).map(c => [c.nome, c.partido, Math.round(c.percentual * 10) / 10]);
+// Mapa de densidade: votos válidos por área e votos de cada candidato por área
+// ({ validos: { area: n }, votos: { numero: { area: n } } }; área = município ou UF).
+function anotarArea(alvo, area, resultado) {
+  alvo.validos[area] = resultado.totais.validos;
+  for (const c of resultado.candidatos) if (c.votos) (alvo.votos[c.numero] ||= {})[area] = c.votos;
+}
+const novaDensidade = () => ({ validos: {}, votos: {} });
 
 // Cargos e turnos disputados em cada UF.
 function combinacoes(uf, eleicoes) {
@@ -141,7 +150,7 @@ async function main() {
 
   // 3. Brasil (Presidente). Os dados do mapa ficam em arquivos próprios, carregados só na página Mapa.
   const br = { resultados: {} };
-  const top3Br = {};
+  const densidadeBr = {};
   for (const t of [1, 2]) {
     if (t === 2 && !eleicoes.segundoTurnoPresidente) continue;
     br.resultados[`${t}|presidente`] = await tse.resultadoEa20({ cargoId: 'presidente', turno: t, uf: null });
@@ -160,13 +169,17 @@ async function main() {
       const resultado = await tse.resultadoEa20({ cargoId: c.id, turno: c.turno, uf });
       meta[k] = await tse.metaCompacta(c.id, c.turno, uf);
       gravar(`uf/${uf}/${c.turno}-${c.id}.bin`, { resultado, meta: meta[k] });
-      if (c.id === 'presidente') (top3Br[c.turno] ||= {})[uf] = top3(resultado.candidatos);
+      if (c.id === 'presidente') anotarArea((densidadeBr[c.turno] ||= novaDensidade()), uf, resultado);
     }
-    // Três candidatos mais votados por município (tooltip do mapa).
-    const topMun = {};
+    // Votos de cada candidato por município (mapa de densidade).
+    const densidade = {};
     let atualizado = {};
     if (detalhada) {
       atualizado = { secoes: secoes.manifesto(uf)?.fonteAtualizadaEm || '', presidente: secoes.manifesto('BR')?.fonteAtualizadaEm || '' };
+      // Projeção do mapa da UF: os locais de votação viram pontos nas mesmas coordenadas.
+      const malhaDaUf = await mapa.malhaUf(uf);
+      const { proj } = malhaDaUf;
+      const caminhoMun = new Map(malhaDaUf.municipios.map(x => [x.cd, x.d]));
       let zonasGravadas = 0;
       for (const m of munsUf) {
         const idx = await locais.locaisMunicipio(uf, m.cd).catch(() => ({ locais: [] }));
@@ -179,10 +192,12 @@ async function main() {
         }
         const totais = {};
         const zonasComDados = new Set();
+        const zonasMun = new Map();
         for (const zona of m.zonas) {
           const { maj, prop } = zonaSeparada(uf, m.cd, zona);
           if (!Object.keys(maj).length && !Object.keys(prop).length) continue;
           zonasComDados.add(zona);
+          zonasMun.set(zona, { maj, prop });
           const e = eleitoresPorZona.get(zona) || {};
           // Presidente/Governador/Senador num arquivo pequeno; Deputados (milhares de votáveis) em outro.
           gravar(`s/${uf}/${m.cd}/${zona}.bin`, { e, ...maj });
@@ -201,43 +216,65 @@ async function main() {
           const t = totais[`${c.turno}|${c.codigo}`];
           if (!t) continue;
           const r = calc.montarResultado(t.v, c.proporcional, meta[`${c.turno}|${c.id}`], t.s);
-          (topMun[`${c.turno}|${c.id}`] ||= {})[m.cd] = top3(r.candidatos);
+          anotarArea((densidade[`${c.turno}|${c.id}`] ||= novaDensidade()), m.cd, r);
         }
+        // el = eleitores aptos do local (o detalhe por seção está no arquivo da zona); x, y = posição no mapa da UF.
+        const locaisM = idx.locais.map(l => {
+          const [x, y] = l.lat !== undefined ? mapa.projetarPonto(proj, l.lon, l.lat) : [];
+          return { z: l.z, n: l.n, nome: l.nome, end: l.end, bairro: l.bairro, secoes: l.secoes, el: (l.el || []).reduce((a, x2) => a + x2, 0), x, y };
+        });
         gravar(`m/${uf}/${m.cd}.bin`, {
           zonas: [...zonasComDados].sort((a, b) => a - b),
-          // el = eleitores aptos do local (o detalhe por seção está no arquivo da zona).
-          locais: idx.locais.map(l => ({ z: l.z, n: l.n, nome: l.nome, end: l.end, bairro: l.bairro, secoes: l.secoes, el: (l.el || []).reduce((a, x) => a + x, 0) })),
+          locais: locaisM,
           totais,
+          // Áreas dos locais de votação e fronteiras entre zonas (mapa do município).
+          geo: caminhoMun.has(m.cd) ? dividirMunicipio(locaisM, caminhoMun.get(m.cd)) : null,
         });
+        // Mapa dentro do município: votos por local (majoritários e proporcionais em arquivos separados).
+        const porLocal = calc.votosPorLocal(idx.locais, zonasMun, combos, meta);
+        gravar(`mapa/l/${uf}/${m.cd}.bin`, porLocal.maj);
+        gravar(`mapa/l/${uf}/${m.cd}-p.bin`, porLocal.prop);
       }
       console.log(`  ${uf}: ${munsUf.length} municípios, ${zonasGravadas} zonas com votos por seção.`);
     } else {
       console.log(`  ${uf}: resultado estadual e mapa (sem detalhamento por seção).`);
     }
-    // Mapa: partido líder (+3 partidos) por município e, se houver, os 3 candidatos mais votados.
-    for (const c of combos) {
-      const k = `${c.turno}|${c.id}`;
-      try {
-        const { lideres } = await mapa.lideres(c.id, c.turno, uf);
-        gravar(`mapa/lideres/${uf}/${c.turno}-${c.id}.bin`, { lideres, top3: topMun[k] || null });
-      } catch (e) { console.warn(`  mapa ${uf} ${k}: ${e.message}`); }
+    // Mapa de densidade por município (só UFs detalhadas: vem da soma das seções).
+    for (const [k, d] of Object.entries(densidade)) {
+      const [t, id] = k.split('|');
+      gravar(`mapa/votos/${uf}/${t}-${id}.bin`, d);
     }
     gravar(`uf/${uf}.bin`, { uf, detalhada, municipios: munsUf.map(m => ({ cd: m.cd, nm: m.nm, capital: m.capital, zonas: m.zonas })), atualizado });
   }
 
   gravar('br.bin', br);
-  for (const t of Object.keys(top3Br)) {
-    gravar(`mapa/lideres/BR/${t}-presidente.bin`, { lideres: (await mapa.lideres('presidente', Number(t), null)).lideres, top3: top3Br[t] });
-  }
+  // Presidente no mapa do Brasil: votos por UF (resultado oficial de cada estado).
+  for (const [t, d] of Object.entries(densidadeBr)) gravar(`mapa/votos/BR/${t}-presidente.bin`, d);
 
   // 5. Mapa (IBGE).
   gravar('mapa/brasil.bin', await mapa.malhaBrasil());
   for (const u of cfg.UFS) gravar(`mapa/${u.sigla}.bin`, await mapa.malhaUf(u.sigla));
 
-  // 6. Busca de candidatos (só dados públicos de candidatura; nada de CPF/e-mail/título).
+  // 6. Busca de candidatos (só dados públicos de candidatura; nada de CPF/e-mail/título) e fotos.
   const { lista } = await tse.candidatos();
   const cargosIdx = Object.keys(cfg.CARGOS);
-  gravar('candidatos.bin', { cargos: cargosIdx, lista: lista.map(c => [c.id, c.nome, c.nomeCompleto, c.numero, cargosIdx.indexOf(c.cargo), c.uf, c.partido, c.situacao, c.turno2 ? 1 : 0]) });
+  const dirFotos = path.join(DIST, 'img', 'c');
+  garantirDir(dirFotos);
+  let comFoto = 0;
+  for (const sigla of new Set(lista.map(c => c.uf))) {
+    try { await fotos.garantirFotos(sigla); } catch (e) { console.warn(`  fotos ${sigla}: ${e.message}`); }
+  }
+  const temFoto = new Set();
+  for (const c of lista) {
+    const f = fotos.arquivoFoto(c.uf, c.id);
+    if (!f) continue;
+    fs.copyFileSync(f, path.join(dirFotos, `${c.id}.jpg`));
+    temFoto.add(c.id);
+    comFoto++;
+  }
+  console.log(`  fotos: ${comFoto} de ${lista.length} candidatos.`);
+  // Campo 9: 1 = há foto em img/c/{id}.jpg.
+  gravar('candidatos.bin', { cargos: cargosIdx, lista: lista.map(c => [c.id, c.nome, c.nomeCompleto, c.numero, cargosIdx.indexOf(c.cargo), c.uf, c.partido, c.situacao, c.turno2 ? 1 : 0, temFoto.has(c.id) ? 1 : 0]) });
 
   // 7. Índice.
   gravar('indice.bin', {

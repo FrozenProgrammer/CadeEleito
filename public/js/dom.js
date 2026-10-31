@@ -52,6 +52,16 @@ export function situacao(s) {
   return (t.charAt(0).toLocaleUpperCase('pt-BR') + t.slice(1)).replace(/\bqp\b/g, 'QP');
 }
 
+// Foto oficial do candidato (TSE), servida pelo próprio site (img/c/{id}.jpg). Sem foto
+// publicada, mostra as iniciais. A foto é decorativa: o nome sempre aparece ao lado.
+export const urlFoto = c => (c?.foto && /^\d{6,14}$/.test(String(c.id)) ? `img/c/${c.id}.jpg` : null);
+export function fotoCandidato(c, cls = 'foto') {
+  const url = urlFoto(c);
+  if (url) return h('img', { class: cls, src: url, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' });
+  const iniciais = String(c?.nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+  return h('span', { class: `${cls} foto-vazia`, 'aria-hidden': 'true', text: iniciais });
+}
+
 export function debounce(fn, ms) {
   let t;
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };

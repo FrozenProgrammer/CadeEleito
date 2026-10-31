@@ -2,7 +2,7 @@
 // Qualquer recorte pode ser compartilhado copiando o endereço.
 
 const CAMPOS = ['turno', 'cargo', 'uf', 'mun', 'zona', 'bairro', 'local', 'secao', 'cand'];
-const PAGINAS = ['resultados', 'graficos', 'mapa', 'sobre'];
+const PAGINAS = ['resultados', 'mapa', 'sobre'];
 const FORMATOS = {
   turno: /^[12]$/, cargo: /^[a-z_]{1,30}$/, uf: /^[A-Z]{2}$/, mun: /^\d{5}$/, zona: /^[1-9]\d{0,3}$/,
   bairro: /^[^\u0000-\u001f]{1,150}$/, local: /^[1-9]\d{0,4}$/, secao: /^[1-9]\d{0,4}$/, cand: /^\d{1,20}$/,

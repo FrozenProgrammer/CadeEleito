@@ -56,8 +56,10 @@ test('entradas maliciosas são recusadas antes de qualquer leitura de arquivo', 
   for (const mun of ['../../indice', '1234', '123456', '01007/../x']) {
     await rejeita(api('/api/locais', { uf: 'AC', mun }), 400);
   }
-  await rejeita(api('/api/mapa/lideres', { cargo: '../../indice', turno: 1 }), 400);
-  await rejeita(api('/api/mapa/lideres', { cargo: 'governador', turno: 1, uf: '../x' }), 400);
+  await rejeita(api('/api/mapa/candidato', { cargo: '../../indice', turno: 1, numero: '13' }), 400);
+  await rejeita(api('/api/mapa/candidato', { cargo: 'governador', turno: 1, uf: '../x', numero: '13' }), 400);
+  await rejeita(api('/api/mapa/candidato', { cargo: 'governador', turno: 1, uf: 'SP', numero: '../1' }), 400);
+  await rejeita(api('/api/mapa/candidato', { cargo: 'governador', turno: 1, numero: '13' }), 400); // cargo estadual sem UF
   await rejeita(api('/api/inexistente'), 404);
   const suspeitos = pedidos.slice(antes).filter(p => /\.\.|%2e|%2f|<|\u0000/i.test(p));
   assert.deepEqual(suspeitos, [], 'nenhum pedido com caminho suspeito');
@@ -241,7 +243,7 @@ test('busca de candidatos: acentos, número exato primeiro, limite de 25 e texto
 // ---------------------------------------------------------------------------
 // Mapa.
 
-test('mapa: toda área com líder existe na malha e todo líder tem sigla e percentual válido', opts, () => {
+test('mapa: toda área com votos existe na malha e os percentuais são válidos', opts, () => {
   const problemas = [];
   const brasil = ler('mapa/brasil.bin');
   assert.equal(brasil.ufs.length, 27);
@@ -257,13 +259,121 @@ test('mapa: toda área com líder existe na malha e todo líder tem sigla e perc
     if (semMalha.length > 2) problemas.push(`${sigla}: ${semMalha.length} municípios sem malha`);
     for (const cd of ids) if (!cods.has(cd)) problemas.push(`${sigla}: área ${cd} da malha não é município do TSE`);
     for (const m of malha.municipios) if (!/^[\d\sMLHVCSQTAZmlhvcsqtaz.,-]+$/.test(m.d)) problemas.push(`${sigla}/${m.cd}: caminho SVG inesperado`);
-    const dir = path.join(DADOS, 'mapa', 'lideres', sigla);
+    if (!ix.detalhadas.includes(sigla)) continue;
+    const dir = path.join(DADOS, 'mapa', 'votos', sigla);
     for (const arq of fs.readdirSync(dir)) {
-      const { lideres } = ler(`mapa/lideres/${sigla}/${arq}`);
-      for (const [cd, l] of Object.entries(lideres)) {
-        if (!cods.has(cd)) problemas.push(`${sigla}/${arq}: área ${cd} não é município`);
-        if (l && (!l.sigla || !(l.percentual >= 0 && l.percentual <= 100))) problemas.push(`${sigla}/${arq}/${cd}: líder inválido`);
+      const { validos, votos } = ler(`mapa/votos/${sigla}/${arq}`);
+      for (const cd of Object.keys(validos)) if (!cods.has(cd)) problemas.push(`${sigla}/${arq}: área ${cd} não é município`);
+      for (const [num, porMun] of Object.entries(votos)) {
+        for (const [cd, v] of Object.entries(porMun)) {
+          if (!(Number.isInteger(v) && v > 0 && v <= (validos[cd] || 0))) problemas.push(`${sigla}/${arq}/${num}/${cd}: votos fora de 0..válidos`);
+        }
       }
+    }
+  }
+  assert.deepEqual(problemas.slice(0, 20), []);
+});
+
+test('mapa de densidade: votos do candidato somados nos municípios = total oficial do estado', opts, async () => {
+  const problemas = [];
+  for (const sigla of ix.detalhadas) {
+    for (const arq of fs.readdirSync(path.join(DADOS, 'mapa', 'votos', sigla))) {
+      const { votos } = ler(`mapa/votos/${sigla}/${arq}`);
+      const { resultado } = ler(`uf/${sigla}/${arq}`);
+      for (const c of resultado.candidatos.slice(0, 5)) {
+        const soma = Object.values(votos[c.numero] || {}).reduce((a, v) => a + v, 0);
+        if (soma !== c.votos) problemas.push(`${sigla}/${arq} ${c.numero}: mapa ${soma} ≠ oficial ${c.votos}`);
+      }
+    }
+  }
+  assert.deepEqual(problemas.slice(0, 20), []);
+  // API: percentuais por área, máximo coerente e Presidente por UF no mapa do Brasil.
+  const sp = await api('/api/mapa/candidato', { cargo: 'governador', turno: 1, uf: 'SP', numero: ler('uf/SP/1-governador.bin').resultado.candidatos[0].numero });
+  const pcts = Object.values(sp.areas).map(a => a.percentual);
+  assert.ok(pcts.every(p => p >= 0 && p <= 100));
+  assert.equal(sp.max, Math.max(...pcts));
+  const br = await api('/api/mapa/candidato', { cargo: 'presidente', turno: 1, numero: ler('br.bin').resultados['1|presidente'].candidatos[0].numero });
+  assert.equal(Object.keys(br.areas).length, 27);
+  const semVotos = await api('/api/mapa/candidato', { cargo: 'governador', turno: 1, uf: 'SP', numero: '99999' });
+  assert.equal(semVotos.max, 0, 'número sem candidato: mapa vazio, sem erro');
+});
+
+test('mapa do município: votos por local de votação somam exatamente o total do município', opts, () => {
+  const problemas = [];
+  const codigo = id => String(Number(ix.cargos.find(c => c.id === id).codigo));
+  for (const uf of ['AC', 'SP', 'RJ', 'MG', 'BA'].filter(u => ix.detalhadas.includes(u))) {
+    const muns = ler(`uf/${uf}.bin`).municipios;
+    for (const m of [muns.find(x => x.capital), muns[1]].filter(Boolean)) {
+      const M = ler(`m/${uf}/${m.cd}.bin`);
+      const comPosicao = M.locais.filter(l => Number.isFinite(l.x) && Number.isFinite(l.y)).length;
+      if (comPosicao < M.locais.length * 0.9) problemas.push(`${uf}/${m.cd}: só ${comPosicao} de ${M.locais.length} locais com posição`);
+      for (const suf of ['', '-p']) {
+        const d = ler(`mapa/l/${uf}/${m.cd}${suf}.bin`);
+        if (d.l.length !== M.locais.length) problemas.push(`${uf}/${m.cd}${suf}: ${d.l.length} locais ≠ ${M.locais.length}`);
+        for (const [k, c] of Object.entries(d.c)) {
+          const [t, id] = k.split('|');
+          const oficial = M.totais[`${t}|${codigo(id)}`]?.v || {};
+          for (const [num, pares] of Object.entries(c.n)) {
+            let soma = 0;
+            for (let i = 1; i < pares.length; i += 2) soma += pares[i];
+            if (soma !== oficial[num]) problemas.push(`${uf}/${m.cd} ${k} nº ${num}: locais ${soma} ≠ município ${oficial[num]}`);
+          }
+          if (c.v.some((v, i) => v < 0 || !Number.isInteger(v))) problemas.push(`${uf}/${m.cd} ${k}: válidos inválidos`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(problemas.slice(0, 20), []);
+});
+
+test('API do mapa do município: percentuais por local e entradas maliciosas recusadas', opts, async () => {
+  const ac = ler('uf/AC.bin').municipios.find(m => m.capital);
+  const gov = ler('uf/AC/1-governador.bin').resultado.candidatos[0].numero;
+  const r = await api('/api/mapa/locais', { cargo: 'governador', turno: 1, uf: 'AC', mun: ac.cd, numero: gov });
+  assert.ok(r.locais.length > 10);
+  assert.ok(r.locais.every(l => l.percentual >= 0 && l.percentual <= 100 && l.votos <= l.validos));
+  assert.equal(r.max, Math.max(...r.locais.map(l => l.percentual)));
+  await rejeita(api('/api/mapa/locais', { cargo: 'governador', turno: 1, uf: 'AC', mun: '../../x', numero: gov }), 400);
+  await rejeita(api('/api/mapa/locais', { cargo: 'governador', turno: 1, uf: '../', mun: ac.cd, numero: gov }), 400);
+  await rejeita(api('/api/mapa/locais', { cargo: 'hack', turno: 1, uf: 'AC', mun: ac.cd, numero: gov }), 400);
+});
+
+test('fotos dos candidatos: toda foto marcada existe, é JPEG e é pequena', opts, () => {
+  const { lista } = ler('candidatos.bin');
+  const comFoto = lista.filter(c => c[9] === 1);
+  assert.ok(comFoto.length > lista.length * 0.9, `poucas fotos: ${comFoto.length} de ${lista.length}`);
+  const problemas = [];
+  for (const c of comFoto) {
+    const f = path.join(RAIZ, 'dist', 'img', 'c', `${c[0]}.jpg`);
+    if (!/^\d{6,14}$/.test(c[0])) { problemas.push(`id inesperado ${c[0]}`); continue; }
+    let b;
+    try { b = fs.readFileSync(f); } catch { problemas.push(`${c[0]}: arquivo ausente`); continue; }
+    if (b[0] !== 0xff || b[1] !== 0xd8 || b.length > 512 * 1024) problemas.push(`${c[0]}: não é JPEG pequeno`);
+  }
+  assert.deepEqual(problemas.slice(0, 10), []);
+});
+
+test('mapa do município: áreas dos locais (Voronoi) cobrem cada local uma vez e há fronteiras entre zonas', opts, () => {
+  const problemas = [];
+  for (const uf of ['AC', 'SP', 'MG', 'RJ'].filter(u => ix.detalhadas.includes(u))) {
+    const muns = ler(`uf/${uf}.bin`).municipios;
+    for (const m of [muns.find(x => x.capital), muns[2]].filter(Boolean)) {
+      const M = ler(`m/${uf}/${m.cd}.bin`);
+      if (!M.geo) { problemas.push(`${uf}/${m.cd}: sem divisão`); continue; }
+      const vistos = new Map();
+      for (const [ids, d] of M.geo.c) {
+        if (!/^M[\d. L-]+Z$/.test(d)) problemas.push(`${uf}/${m.cd}: caminho de área inesperado`);
+        for (const i of ids) {
+          if (!M.locais[i]) problemas.push(`${uf}/${m.cd}: índice ${i} fora dos locais`);
+          vistos.set(i, (vistos.get(i) || 0) + 1);
+        }
+      }
+      if ([...vistos.values()].some(n => n !== 1)) problemas.push(`${uf}/${m.cd}: local em mais de uma área`);
+      const comPosicao = M.locais.filter(l => Number.isFinite(l.x)).length;
+      if (vistos.size < comPosicao * 0.95) problemas.push(`${uf}/${m.cd}: só ${vistos.size} de ${comPosicao} locais com área`);
+      const zonas = new Set(M.locais.map(l => l.z)).size;
+      if (zonas > 1 && !M.geo.f) problemas.push(`${uf}/${m.cd}: ${zonas} zonas sem fronteiras`);
+      if (M.geo.f && !/^(M[\d. -]+L[\d. -]+)+$/.test(M.geo.f)) problemas.push(`${uf}/${m.cd}: fronteiras com formato inesperado`);
     }
   }
   assert.deepEqual(problemas.slice(0, 20), []);

@@ -39,10 +39,11 @@
   /* séries (valores do tema escuro da paleta validada) */
   --s1: #3987e5;
   --s1-forte: #6da7ec;
-  --s2: #d95926;
-  --s3: #199e70;
-  --s-outros: #5c6169;
   --s-sem: #24282e;
+  /* densidade de votos no mapa: escala sequencial azul (paleta de referência validada); no
+     escuro a cor mais fraca se aproxima do fundo e a mais forte é a mais clara */
+  --d1: #0d366b; --d2: #184f95; --d3: #256abf; --d4: #2a78d6; --d5: #3987e5; --d6: #6da7ec; --d7: #86b6ef; --d8: #9ec5f4; --d9: #cde2fb;
+  --s-nd: #4b515b;   /* sem dados (área sem votação publicada) */
   --grade: #252a31;
   --fonte: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
@@ -81,15 +82,10 @@
   /* séries (valores do tema claro da paleta validada) */
   --s1: #2a78d6;
   --s1-forte: #1c5cab;
-  --s2: #eb6834;
-  --s3: #1baf7a;
-  --s-outros: #b8bcc4;
   --s-sem: #e8ebef;
+  --d1: #cde2fb; --d2: #9ec5f4; --d3: #86b6ef; --d4: #6da7ec; --d5: #3987e5; --d6: #2a78d6; --d7: #256abf; --d8: #184f95; --d9: #0d366b;
+  --s-nd: #b9bfc8;
   --grade: #e6e9ee;
-}
-:root[data-tema="claro"] body[data-pagina="graficos"] {
-  --acento: #374151; --acento-tinta: #ffffff; --acento-texto: #374151;
-  --heroi-a: #f1f2f4; --heroi-b: #dfe2e7; --heroi-brilho: rgba(55, 65, 81, .10);
 }
 :root[data-tema="claro"] body[data-pagina="mapa"] {
   --acento: #57534e; --acento-tinta: #ffffff; --acento-texto: #57534e;
@@ -102,16 +98,7 @@
 
 /* ---------------------------------------------------------------- temas por página */
 
-/* Gráficos: escala de cinza (grafite); as barras azuis ganham destaque. */
-body[data-pagina="graficos"] {
-  --acento: #cbd2dc;
-  --acento-tinta: #0c0e12;
-  --acento-texto: #d5dbe3;
-  --heroi-a: #121417;
-  --heroi-b: #2a2e35;
-  --heroi-brilho: rgba(203, 210, 220, .14);
-}
-/* Mapa: neutros (pedra), sem competir com as cores dos partidos. */
+/* Mapa: neutros (pedra), sem competir com a escala azul de densidade. */
 body[data-pagina="mapa"] {
   --acento: #d6d0c8;
   --acento-tinta: #16130f;
@@ -167,8 +154,8 @@ button, input, select { font: inherit; color: inherit; }
 
 .topo {
   position: sticky; top: 0; z-index: 30;
-  background: color-mix(in srgb, var(--topo) 92%, transparent);
-  backdrop-filter: saturate(140%) blur(10px);
+  /* Fundo sólido: desfoque (backdrop-filter) por trás do topo fixo custa caro ao rolar sobre o mapa. */
+  background: var(--topo);
   color: var(--texto);
   border-bottom: 1px solid var(--borda);
 }
@@ -223,7 +210,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .pagina-conteudo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 18px; }
 /* Itens de grid não devem crescer além da coluna por causa de tabelas largas. */
-.pagina-conteudo > *, .filtros > *, .filtros-linha > *, .mapa-layout > *, .grade-graficos > * { min-width: 0; }
+.pagina-conteudo > *, .filtros > *, .filtros-linha > *, .mapa-layout > * { min-width: 0; }
 .cartao-topo { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .cartao-topo > :first-child { margin-right: auto; }
 .cartao-sub { color: var(--texto-3); font-size: .86rem; margin-top: 3px; }
@@ -232,19 +219,16 @@ button, input, select { font: inherit; color: inherit; }
 
 .filtros { padding: 18px 20px 14px; display: grid; gap: 14px; }
 .filtros-linha { display: grid; gap: 12px; }
-.filtros-principal { grid-template-columns: minmax(0, 1fr) auto minmax(180px, 240px); align-items: end; }
+.filtros-principal { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
 .filtros-cascata { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .filtros-rodape { display: flex; align-items: center; gap: 12px; justify-content: space-between; border-top: 1px dashed var(--borda); padding-top: 10px; }
 .filtros-dica { color: var(--texto-3); font-size: .8rem; }
 .filtros-busca { display: flex; gap: 10px; align-items: center; min-width: 0; }
-/* Tela inicial: só a busca e o cargo. */
-.filtros-vazio .campo-turno, .filtros-vazio .filtros-cascata, .filtros-vazio .filtros-rodape { display: none; }
-.filtros-vazio .filtros-principal { grid-template-columns: minmax(0, 1fr) minmax(180px, 240px); }
-/* Primeira visita à página inicial: só a busca por nome, numa caixa centralizada
-   do tamanho do maior nome de urna + número (~36 caracteres). */
+/* Sem candidato escolhido: só a busca por nome ou número, numa caixa centralizada do tamanho
+   do maior nome de urna + número (~36 caracteres). Turno e cascata aparecem depois da escolha. */
 .filtros.filtros-so-busca { max-width: 560px; margin-inline: auto; }
 .filtros-so-busca .filtros-principal { grid-template-columns: minmax(0, 1fr); }
-.filtros-so-busca .filtros-principal > .campo { display: none; }
+.filtros-so-busca .filtros-principal > .campo, .filtros-so-busca .filtros-cascata, .filtros-so-busca .filtros-rodape { display: none; }
 
 .campo { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .campo-rotulo { font-size: .74rem; font-weight: 650; color: var(--texto-3); text-transform: uppercase; letter-spacing: .05em; }
@@ -337,40 +321,49 @@ select.controle {
 }
 :root[data-tema="claro"] .selo-eleito { background: #dcfce7; color: #166534; border-color: #86efac; }
 h3 .selo-eleito { vertical-align: middle; margin-left: 10px; }
-.nome-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
-.nome-linha .selo-eleito { margin: 0; }
 
-/* ---------------------------------------------------------------- KPIs */
 
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-.kpi { background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; padding: 14px 16px; display: grid; gap: 2px; box-shadow: var(--sombra-1); }
-.kpi-rotulo { font-size: .76rem; font-weight: 650; color: var(--texto-3); text-transform: uppercase; letter-spacing: .05em; }
-.kpi-valor { font-size: 1.45rem; font-weight: 750; letter-spacing: -.02em; }
-.kpi-detalhe { font-size: .8rem; color: var(--texto-3); }
+/* ---------------------------------------------------------------- cartão do candidato
+   Pensado para print e compartilhamento: marca, candidato, recorte (onde) e números. */
 
-/* ---------------------------------------------------------------- destaque do candidato */
-
-.destaque {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; align-items: center;
-  padding: 18px 20px; border-radius: var(--raio);
-  background: linear-gradient(120deg, var(--heroi-a), var(--heroi-b)); color: var(--texto); border: 1px solid var(--borda-forte); box-shadow: var(--sombra-2);
+.cartao-social {
+  display: grid; gap: 18px; padding: 24px 26px; border-radius: var(--raio);
+  width: 100%; max-width: 760px; margin-inline: auto; color: var(--texto);
+  background:
+    radial-gradient(600px 240px at 90% -20%, var(--heroi-brilho), transparent 60%),
+    linear-gradient(135deg, var(--heroi-a), var(--heroi-b));
+  border: 1px solid var(--borda-forte); box-shadow: var(--sombra-2);
 }
+.social-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.social-marca { display: inline-flex; align-items: center; gap: 8px; font-weight: 900; font-size: 1.05rem; letter-spacing: -.01em; }
+.social-logo { width: 28px; height: 28px; flex: none; }
+.social-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
+.social-logo .lg-f2 { fill: var(--logo-2); }
+.social-eleicao { font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--acento-texto); }
+.social-cand { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center; }
 .destaque-num { font-size: 1.6rem; font-weight: 800; background: var(--vidro-forte); border-radius: 14px; padding: 12px 16px; font-variant-numeric: tabular-nums; }
-.destaque-sobre { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; opacity: .8; font-weight: 650; }
-.destaque-info h3 { font-size: 1.4rem; margin: 2px 0; }
-.destaque-info p { opacity: .8; font-size: .9rem; }
-.destaque-metricas { display: grid; grid-template-columns: repeat(4, auto); gap: 8px 22px; }
-.destaque-metricas div { display: grid; }
-.destaque-metricas strong { font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em; }
-.destaque-metricas span { font-size: .78rem; opacity: .78; }
-.destaque-vazio { grid-template-columns: auto 1fr; background: var(--superficie); color: var(--texto); border: 1px solid var(--borda); }
-.destaque-vazio .destaque-num { background: var(--superficie-3); }
-.destaque-vazio p { color: var(--texto-2); }
+.destaque-sobre { font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-2); font-weight: 650; }
+.social-nome h3 { font-size: clamp(1.4rem, 3.4vw, 1.9rem); line-height: 1.15; margin: 2px 0; overflow-wrap: anywhere; }
+.social-nome p { color: var(--texto-2); font-size: .9rem; }
+.social-local { display: flex; gap: 10px; align-items: flex-start; background: var(--vidro); border-radius: 12px; padding: 12px 14px; }
+.social-local > .icone { color: var(--acento-texto); margin-top: 2px; flex: none; }
+.social-local > div { display: grid; gap: 2px; min-width: 0; }
+.social-rotulo { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-2); }
+.social-local strong { font-size: 1.02rem; overflow-wrap: anywhere; }
+.social-local small { color: var(--texto-2); font-size: .82rem; }
+.social-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.social-metrica { background: var(--vidro); border-radius: 12px; padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.social-metrica strong { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.social-metrica span { font-size: .78rem; color: var(--texto-2); }
+.social-fonte { font-size: .74rem; color: var(--texto-2); }
+.compartilhar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; width: 100%; max-width: 760px; margin-inline: auto; }
+.compartilhar-titulo { font-weight: 650; color: var(--texto-2); font-size: .9rem; }
+.compartilhar-aviso { flex-basis: 100%; text-align: center; font-size: .84rem; color: var(--acento-texto); min-height: 1.3em; }
+.compartilhar .icone { width: 16px; height: 16px; }
 
 /* ---------------------------------------------------------------- tabela */
 
 section.cartao { padding: 18px 20px; }
-.tabela-contador { color: var(--texto-3); font-size: .86rem; align-self: center; }
 .tabela-rolagem { overflow-x: auto; margin: 0 -6px; }
 .tabela-alta { max-height: 380px; overflow-y: auto; }
 .tabela { width: 100%; border-collapse: collapse; font-size: .93rem; }
@@ -382,23 +375,6 @@ section.cartao { padding: 18px 20px; }
 .tabela td { padding: 10px; border-bottom: 1px solid var(--borda); vertical-align: middle; }
 .tabela tbody tr:hover { background: var(--superficie-2); }
 .tabela tbody tr:last-child td { border-bottom: 0; }
-.tabela .pos { color: var(--texto-3); width: 44px; }
-.linha-destaque { background: var(--acento-fundo) !important; }
-.linha-destaque td:first-child { box-shadow: inset 3px 0 0 var(--acento); }
-.cand-celula { display: flex; align-items: center; gap: 12px; }
-.cand-celula > span:last-child { display: flex; flex-direction: column; min-width: 0; }
-.cand-celula small { color: var(--texto-3); font-size: .8rem; }
-.cand-numero {
-  min-width: 52px; text-align: center; font-weight: 750; font-variant-numeric: tabular-nums;
-  background: var(--superficie-3); border-radius: 8px; padding: 4px 6px; font-size: .86rem; color: var(--texto-2);
-}
-.col-pct { width: 200px; }
-.pct-celula { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
-.pct-celula > span:first-child { min-width: 62px; }
-.mini-trilho { width: 110px; height: 8px; display: block; position: relative; }
-.mini-barra { position: absolute; left: 0; top: 0; bottom: 0; background: var(--s1); border-radius: 0 4px 4px 0; }
-.linha-destaque .mini-barra { background: var(--s1-forte); }
-section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
 .vazio { padding: 28px; text-align: center; color: var(--texto-3); }
 
 /* ---------------------------------------------------------------- avisos e carregamento */
@@ -427,27 +403,6 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
 .fonte { display: flex; gap: 8px; align-items: flex-start; color: var(--texto-3); font-size: .8rem; line-height: 1.5; padding: 0 2px; }
 .fonte .icone { width: 15px; height: 15px; margin-top: 2px; }
 
-/* ---------------------------------------------------------------- gráficos de barras */
-
-.grade-graficos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.cartao-grafico { min-width: 0; }
-.barras { --rotulo: 190px; --folga-valor: 64px; display: grid; gap: 10px; }
-.barras-area { position: relative; padding-bottom: 24px; }
-.barras-grade { position: absolute; top: 0; bottom: 0; left: calc(var(--rotulo) + 12px); right: var(--folga-valor); pointer-events: none; }
-.barras-tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--grade); }
-.barras-tick > span { position: absolute; bottom: 0; transform: translateX(-50%); font-size: .72rem; color: var(--texto-3); font-variant-numeric: tabular-nums; }
-.barras-linha {
-  position: relative; display: grid; grid-template-columns: var(--rotulo) minmax(0, 1fr); gap: 12px; align-items: center;
-  padding: 7px 0; border-radius: 8px; outline-offset: 0; cursor: default;
-}
-.barras-linha:hover .barra, .barras-linha:focus-visible .barra { filter: brightness(1.12); }
-.barras-rotulo { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-.barras-rotulo strong { font-size: .9rem; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.barras-rotulo small { font-size: .76rem; color: var(--texto-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.barra-trilho { position: relative; height: 22px; margin-right: var(--folga-valor); }
-.barra { height: 100%; background: var(--s1); border-radius: 0 4px 4px 0; transition: width .35s ease; }
-.barra-destaque { background: var(--s1-forte); }
-.barra-valor { position: absolute; top: 50%; transform: translate(8px, -50%); font-size: .84rem; font-weight: 700; color: var(--texto); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .tabela-dados summary { cursor: pointer; color: var(--azul); font-weight: 600; font-size: .86rem; width: fit-content; padding: 2px 0; }
 .tabela-dados table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .88rem; }
@@ -456,29 +411,20 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
 .tabela-dados .num { text-align: right; }
 
 /* Tooltip em cartão na cor da superfície: as cores das séries mantêm o contraste validado. */
+/* position: fixed + transform: mover o tooltip não recalcula o layout da página. */
 .tooltip {
-  position: absolute; z-index: 60; pointer-events: none; display: grid; gap: 2px;
+  position: fixed; left: 0; top: 0; will-change: transform; z-index: 60; pointer-events: none; display: grid; gap: 2px;
   background: var(--superficie); color: var(--texto); border: 1px solid var(--borda-forte);
   border-radius: 10px; padding: 9px 12px; font-size: .82rem; max-width: 320px;
   box-shadow: var(--sombra-2);
 }
 .tooltip strong { font-size: .88rem; }
 .tooltip > span { color: var(--texto-2); }
+.tt-dens { display: grid; gap: 2px; }
+.tt-dens > span { color: var(--texto-2); font-size: .84rem; }
+.tt-dens .tt-pct { color: var(--texto); font-weight: 800; }
+.tt-detalhe { font-size: .78rem !important; }
 
-.tt-mapa { display: grid; gap: 8px; min-width: 240px; }
-.tt-titulo { font-size: .92rem; }
-.tt-linhas { display: grid; gap: 6px; }
-.tt-linha { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto; gap: 8px; align-items: center; }
-.tt-nome { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tt-nome small { font-weight: 500; color: var(--texto-3); }
-.tt-trilho { display: block; height: 8px; position: relative; }
-.tt-barra { display: block; height: 100%; border-radius: 0 4px 4px 0; }
-.tt-barra.cor-1 { background: var(--s1); }
-.tt-barra.cor-2 { background: var(--s2); }
-.tt-barra.cor-3 { background: var(--s3); }
-.tt-barra.cor-outros { background: var(--s-outros); }
-.tt-pct { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
-.tt-nota { font-size: .72rem; color: var(--texto-3); }
 
 /* ---------------------------------------------------------------- mapa */
 
@@ -486,31 +432,74 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
 .mapa-cartao h2 { font-size: 1.35rem; }
 .mapa-area { min-height: 320px; display: grid; place-items: center; }
 .mapa-svg { width: 100%; height: auto; max-height: 640px; display: block; }
-.mapa-regiao {
-  stroke: var(--superficie); stroke-width: .7; vector-effect: non-scaling-stroke; cursor: pointer;
-  transition: opacity .15s, filter .15s;
-}
-.mapa-regiao:hover, .mapa-regiao:focus-visible { filter: brightness(1.12) saturate(1.1); outline: none; stroke: var(--texto); stroke-width: 1.4; }
-.mapa-regiao.selecionado { stroke: var(--texto); stroke-width: 2.4; }
-.cor-1 { fill: var(--s1); }
-.cor-2 { fill: var(--s2); }
-.cor-3 { fill: var(--s3); }
-.cor-outros { fill: var(--s-outros); }
-.cor-sem { fill: var(--s-sem); }
-.mapa-rotulos text { font-size: 15px; font-weight: 700; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(0, 0, 0, .35); stroke-width: 2px; }
+/* Desempenho: as áreas não têm hover, filtro nem transição próprios (são centenas ou milhares).
+   O destaque é uma camada única por cima (.mapa-hover) e a seleção outra (.mapa-selecao). */
+.mapa-regiao { stroke: var(--superficie); stroke-width: .7; vector-effect: non-scaling-stroke; cursor: pointer; }
+.mapa-regiao:focus-visible { outline: none; stroke: var(--texto); stroke-width: 2; }
+.mapa-hover { fill: var(--texto); fill-opacity: .14; stroke: var(--texto); stroke-width: 1.6; vector-effect: non-scaling-stroke; pointer-events: none; }
+.modo-zonas .mapa-hover { stroke: none; fill-opacity: .2; }
+.mapa-selecao { fill: none; stroke: var(--texto); stroke-width: 2.6; vector-effect: non-scaling-stroke; pointer-events: none; }
+.mapa-neutro, .dens-0 { fill: var(--s-sem); background: var(--s-sem); }
+.cor-sem { fill: var(--s-nd); background: var(--s-nd); }
+.dens-1 { fill: var(--d1); background: var(--d1); }
+.dens-2 { fill: var(--d2); background: var(--d2); }
+.dens-3 { fill: var(--d3); background: var(--d3); }
+.dens-4 { fill: var(--d4); background: var(--d4); }
+.dens-5 { fill: var(--d5); background: var(--d5); }
+.dens-6 { fill: var(--d6); background: var(--d6); }
+.dens-7 { fill: var(--d7); background: var(--d7); }
+.dens-8 { fill: var(--d8); background: var(--d8); }
+.dens-9 { fill: var(--d9); background: var(--d9); }
+/* Mapa do município: áreas dos locais de votação (recortadas pelo contorno), fronteiras e números
+   das zonas. No modo zonas o contorno de cada área tem a cor da própria área (some a costura). */
+.mapa-municipio { max-height: 640px; }
+.mapa-celula { stroke: var(--superficie); stroke-width: .6; vector-effect: non-scaling-stroke; cursor: pointer; }
+.modo-zonas .mapa-celula { stroke-width: .9; }
+.modo-zonas .mapa-celula.dens-0 { stroke: var(--s-sem); }
+.modo-zonas .mapa-celula.cor-sem { stroke: var(--s-nd); }
+.modo-zonas .mapa-celula.dens-1 { stroke: var(--d1); }
+.modo-zonas .mapa-celula.dens-2 { stroke: var(--d2); }
+.modo-zonas .mapa-celula.dens-3 { stroke: var(--d3); }
+.modo-zonas .mapa-celula.dens-4 { stroke: var(--d4); }
+.modo-zonas .mapa-celula.dens-5 { stroke: var(--d5); }
+.modo-zonas .mapa-celula.dens-6 { stroke: var(--d6); }
+.modo-zonas .mapa-celula.dens-7 { stroke: var(--d7); }
+.modo-zonas .mapa-celula.dens-8 { stroke: var(--d8); }
+.modo-zonas .mapa-celula.dens-9 { stroke: var(--d9); }
+.zona-grupo { transition: opacity .2s; }
+.zona-grupo.apagada { opacity: .35; }
+.mapa-fronteira { fill: none; stroke: var(--texto); stroke-width: 1.4; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; opacity: .85; }
+.mapa-contorno-borda { fill: none; stroke: var(--texto); stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.mapa-rotulos.mapa-rotulos-zona text { font-size: var(--fs, 15px); stroke-width: calc(var(--fs, 15px) * .22); }
+.modo-mapa { height: 38px; }
+.modo-mapa .segmento { font-size: .82rem; padding: 0 12px; }
+.painel-bairros { display: grid; gap: 6px; }
+.tabela-compacta { font-size: .86rem; }
+.tabela-compacta td, .tabela-compacta th { padding: 6px 8px; }
+.painel-local { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: .88rem; }
+.painel-local dt { color: var(--texto-3); font-weight: 650; }
+.painel-local dd { margin: 0; overflow-wrap: anywhere; }
+/* Siglas das UFs com contorno da cor do fundo: legíveis sobre qualquer degrau da escala. */
+.mapa-rotulos text { font-size: 15px; font-weight: 700; fill: var(--texto); text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: var(--superficie); stroke-width: 3px; stroke-linejoin: round; }
+.legenda-densidade { display: grid; gap: 8px; padding-top: 14px; }
+.legenda-titulo { font-size: .86rem; font-weight: 650; }
+.legenda-escala { max-width: 420px; }
+.legenda-degraus { display: grid; grid-template-columns: repeat(9, 1fr); height: 14px; border-radius: 4px; overflow: hidden; border: 1px solid var(--borda); }
+.legenda-marcas { display: flex; justify-content: space-between; font-size: .76rem; color: var(--texto-3); font-variant-numeric: tabular-nums; padding-top: 4px; }
+.legenda-extra { padding: 0; }
+.legenda-cor.dens-0, .legenda-cor.cor-sem { border: 1px solid var(--borda-forte); }
+.legenda-nota { font-size: .78rem; color: var(--texto-3); }
+.painel-subtitulo { font-size: .86rem; font-weight: 650; color: var(--texto-2); margin-top: 4px; }
 .legenda { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 0 4px; margin: 0; font-size: .86rem; }
 .legenda li { display: flex; align-items: center; gap: 7px; }
 .legenda span:last-child { color: var(--texto-3); }
 .legenda-cor { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
-.legenda-cor.cor-1 { background: var(--s1); }
-.legenda-cor.cor-2 { background: var(--s2); }
-.legenda-cor.cor-3 { background: var(--s3); }
-.legenda-cor.cor-outros { background: var(--s-outros); }
 .mapa-tabela { margin-top: 8px; }
 .mapa-painel { padding: 18px 20px; position: sticky; top: 80px; }
 .mapa-painel-conteudo { display: grid; gap: 12px; }
 .mapa-painel-conteudo .esqueleto, .mapa-painel-conteudo .aviso { box-shadow: none; padding: 0; border: 0; }
-.mapa-painel-conteudo .barras { --rotulo: 120px; --folga-valor: 64px; }
+.painel-nota { font-size: .84rem; color: var(--texto-2); }
+.tabela-detalhe { display: block; color: var(--texto-3); font-size: .78rem; }
 .painel-titulo { font-size: 1.3rem; }
 .painel-kpis { display: flex; gap: 22px; }
 .painel-kpis div { display: grid; }
@@ -519,7 +508,7 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
 
 /* ---------------------------------------------------------------- sobre */
 
-.sobre article { padding: 26px 28px; display: grid; gap: 14px; max-width: 880px; }
+.sobre article { padding: 26px 28px; display: grid; gap: 14px; width: 100%; max-width: 880px; margin-inline: auto; }
 .sobre h3 { margin-top: 8px; }
 .sobre p, .sobre li, .sobre dd { color: var(--texto-2); }
 .sobre ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
@@ -536,13 +525,10 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
 
 @media (max-width: 1080px) {
   .filtros-cascata { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .destaque { grid-template-columns: auto minmax(0, 1fr); }
-  .destaque-metricas { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mapa-layout { grid-template-columns: 1fr; }
   .mapa-painel { position: static; }
 }
 @media (max-width: 820px) {
-  .grade-graficos { grid-template-columns: 1fr; }
   .filtros-principal { grid-template-columns: 1fr auto; }
   .filtros-busca { grid-column: 1 / -1; flex-wrap: wrap; }
   .cand-chip { max-width: 100%; flex: 1; }
@@ -557,18 +543,8 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
   .filtros { padding: 14px; }
   .filtros-cascata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filtros-rodape { flex-direction: column; align-items: flex-start; }
-  .destaque { grid-template-columns: 1fr; }
-  .destaque-num { width: fit-content; }
-  .destaque-metricas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .col-pct { width: auto; }
-  .mini-trilho { display: none; }
-  .tabela .pos, .tabela th:first-child { display: none; }
   .tabela td, .tabela th { padding: 9px 6px; }
-  .cand-numero { min-width: 40px; padding: 3px 4px; font-size: .8rem; }
-  .cand-celula { gap: 8px; }
-  .pct-celula > span:first-child { min-width: 0; }
   .mapa-area { min-height: 200px; }
-  .barras { --rotulo: 112px; --folga-valor: 64px; }
   section.cartao { padding: 14px; }
   h2 { font-size: 1.3rem; }
   /* Cabeçalho de duas linhas não fica fixo: libera a tela pequena para o conteúdo. */
@@ -587,7 +563,6 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
   .combo-item { padding: 10px; }
   .heroi h1 { font-size: 1.9rem; }
   .heroi-lema { font-size: .92rem; }
-  .filtros-vazio .filtros-principal { grid-template-columns: 1fr; }
 }
 /* Telas de toque: sem hover, o tooltip do mapa não deve ficar preso na tela. */
 @media (hover: none) {
@@ -597,6 +572,67 @@ section.cartao > .botao-secundario { margin-top: 12px; width: 100%; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 @media (forced-colors: active) {
-  .barra, .mini-barra, .tt-barra { background: CanvasText; }
+  .mapa-celula, .mapa-fronteira, .mapa-contorno-borda { stroke: CanvasText; }
   .mapa-regiao { stroke: CanvasText; }
+}
+
+/* Cliques em botões, mapa, rótulos e controles não selecionam (destacam) texto sem querer. */
+button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-lista, .mapa-svg, .mapa-legenda,
+.etiqueta, .compartilhar, .botao-primario, .botao-secundario, .tabela th {
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+}
+@media (max-width: 640px) {
+  .cartao-social { padding: 18px 16px; gap: 14px; }
+  .social-cand { gap: 10px; }
+  .social-foto { width: 64px; height: 86px; border-radius: 12px; }
+  .destaque-num { font-size: 1.25rem; padding: 10px 12px; }
+  .social-metricas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .social-metrica strong { font-size: 1.25rem; }
+}
+
+/* ---------------------------------------------------------------- fotos dos candidatos (TSE) */
+
+.combo-foto, .cand-chip-foto, .social-foto { flex: none; object-fit: cover; object-position: center 20%; background: var(--superficie-3); }
+.combo-foto { width: 34px; height: 44px; border-radius: 7px; }
+.cand-chip-foto { width: 30px; height: 38px; border-radius: 7px; }
+.social-foto { width: 108px; height: 144px; border-radius: 16px; border: 2px solid var(--vidro-forte); box-shadow: var(--sombra-2); }
+.foto-vazia { display: inline-grid; place-items: center; font-weight: 800; color: var(--texto-3); font-size: .78rem; letter-spacing: .02em; }
+.social-foto.foto-vazia { font-size: 1.8rem; }
+
+/* ---------------------------------------------------------------- animações
+   Todas somem com "prefers-reduced-motion" (regra acima). */
+
+/* Troca de tema: círculo a partir do botão (View Transitions) ou transição de cores. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+.tema-mudando, .tema-mudando * { transition: background-color .45s ease, color .45s ease, border-color .45s ease, fill .45s ease, stroke .45s ease !important; }
+.tema-botao .icone { animation: tema-icone .5s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes tema-icone { from { transform: rotate(-120deg) scale(.4); opacity: 0; } }
+
+/* Mapa: uma única animação no <svg> inteiro (as cores "pintam" da esquerda para a direita com
+   um recorte que se abre), em vez de uma animação por área, que pesava em estados e cidades grandes. */
+.mapa-svg { animation: revelar .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+.mapa-municipio { animation: mapa-zoom .6s cubic-bezier(.2, .8, .2, 1) backwards; transform-origin: center; }
+@keyframes revelar { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes mapa-zoom { from { opacity: 0; transform: scale(.6); } }
+.mapa-fronteira, .mapa-rotulos-zona { animation: surgir .4s ease-out .5s backwards; }
+@keyframes surgir { from { opacity: 0; } }
+.mapa-selecao { animation: pulso 1.2s ease-in-out 2; }
+@keyframes pulso { 50% { stroke-width: 5; } }
+.legenda-degraus span { animation: degrau .4s ease-out backwards; transform-origin: left; }
+@keyframes degrau { from { transform: scaleX(0); } }
+.mapa-painel-conteudo > * { animation: subir .4s ease-out backwards; }
+.mapa-painel-conteudo > :nth-child(2) { animation-delay: .05s; }
+.mapa-painel-conteudo > :nth-child(3) { animation-delay: .1s; }
+.mapa-painel-conteudo > :nth-child(n + 4) { animation-delay: .15s; }
+@keyframes subir { from { opacity: 0; transform: translateY(8px); } }
+
+/* Logo do topo: volta ao início com os filtros limpos. */
+.marca-topo { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); text-decoration: none; font-weight: 900; font-size: 1.02rem; letter-spacing: -.01em; border-radius: 10px; padding: 4px 6px; margin-left: -6px; }
+.marca-topo:hover { background: var(--vidro); }
+.marca-topo-logo { width: 28px; height: 28px; flex: none; transition: transform .25s ease; }
+.marca-topo:hover .marca-topo-logo { transform: rotate(-12deg) scale(1.08); }
+.marca-topo-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
+.marca-topo-logo .lg-f2 { fill: var(--logo-2); }
+@media (max-width: 640px) {
+  .marca-topo { order: 0; font-size: .95rem; }
 }

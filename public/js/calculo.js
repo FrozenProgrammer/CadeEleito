@@ -32,6 +32,53 @@ export function somarSecoes(alvos, turno, codigoCargo) {
 // meta = { c: { número: [nome, partido, válido(0|1), situação, eleito(0|1), nomeCompleto] },
 //          p: { número: [sigla, nome, legendaVálida(0|1)] } }
 // votos: Map ou objeto { votável: qtd }
+// Cada seção pertence a um único local: o do boletim de urna, se ele existe no cadastro de locais;
+// senão, o do cadastro. O cadastro sozinho não basta (lista ~1.800 seções em dois locais, por
+// transferência/agregação) e o boletim sozinho também não (em ~1,5% das seções traz um número de
+// local ausente do cadastro). Assim locais e bairros somam exatamente o município.
+// Retorna (zona, seção, dadosDaSeção) => número do local dono.
+export function donoDasSecoes(locais) {
+  const existe = new Set(locais.map(l => `${l.z}|${l.n}`));
+  const cadastro = new Map();
+  for (const l of locais) for (const s of l.secoes) if (!cadastro.has(`${l.z}|${s}`)) cadastro.set(`${l.z}|${s}`, l.n);
+  return (zona, secao, sec) => (existe.has(`${zona}|${sec.l}`) ? sec.l : cadastro.get(`${zona}|${secao}`));
+}
+
+// Mapa dentro do município: votos válidos e votos de cada candidato por local de votação.
+// zonas: Map(zona -> { maj, prop }) com os votos por seção; combos: [{ id, turno, codigo, proporcional }].
+// Retorna { maj, prop }, cada um { l: ['zona|local', ...], c: { 'turno|cargo': { v: [válidos por local],
+// n: { número: [índice, votos, índice, votos, ...] } } } } (votos zerados são omitidos).
+export function votosPorLocal(locais, zonas, combos, metas) {
+  const chaves = locais.map(l => `${l.z}|${l.n}`);
+  const indice = new Map(chaves.map((k, i) => [k, i]));
+  const dono = donoDasSecoes(locais);
+  const saida = { maj: { l: chaves, c: {} }, prop: { l: chaves, c: {} } };
+  for (const c of combos) {
+    const porLocal = locais.map(() => ({}));
+    for (const [zona, d] of zonas) {
+      const porSecao = (c.proporcional ? d.prop : d.maj)?.[c.turno];
+      if (!porSecao) continue;
+      for (const s in porSecao) {
+        const sec = porSecao[s];
+        const vc = sec.c[c.codigo];
+        if (!vc) continue;
+        const i = indice.get(`${zona}|${dono(zona, Number(s), sec)}`);
+        if (i === undefined) continue;
+        const alvo = porLocal[i];
+        for (const v in vc) alvo[v] = (alvo[v] || 0) + vc[v];
+      }
+    }
+    const validos = [], n = {};
+    porLocal.forEach((v, i) => {
+      const r = montarResultado(v, c.proporcional, metas[`${c.turno}|${c.id}`]);
+      validos.push(r.totais.validos);
+      for (const cand of r.candidatos) if (cand.votos) (n[cand.numero] ||= []).push(i, cand.votos);
+    });
+    if (validos.some(Boolean)) saida[c.proporcional ? 'prop' : 'maj'].c[`${c.turno}|${c.id}`] = { v: validos, n };
+  }
+  return saida;
+}
+
 export function montarResultado(votos, proporcional, meta, secoes = 0) {
   const candidatos = [];
   const partidos = new Map();

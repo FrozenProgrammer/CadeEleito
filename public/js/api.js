@@ -2,7 +2,7 @@
 // (JSON comprimido com gzip) e responde às mesmas consultas que as páginas usam.
 // Não há servidor de aplicação: tudo é calculado no navegador, em milissegundos.
 
-import { somarSecoes, montarResultado, normalizar } from './calculo.js';
+import { somarSecoes, montarResultado, normalizar, donoDasSecoes } from './calculo.js';
 
 const BASE = new URL('../dados/', import.meta.url);
 const arquivos = new Map();
@@ -119,17 +119,6 @@ function envelope(q, r, extra, fonte) {
   };
 }
 
-// Cada seção pertence a um único local: o do boletim de urna, se ele existe no cadastro de locais;
-// senão, o do cadastro. O cadastro sozinho não basta (lista ~1.800 seções em dois locais, por
-// transferência/agregação) e o boletim sozinho também não (em ~1,5% das seções traz um número de
-// local ausente do cadastro). Assim locais e bairros somam exatamente o município.
-function donoDasSecoes(locais) {
-  const existe = new Set(locais.map(l => `${l.z}|${l.n}`));
-  const cadastro = new Map();
-  for (const l of locais) for (const s of l.secoes) if (!cadastro.has(`${l.z}|${s}`)) cadastro.set(`${l.z}|${s}`, l.n);
-  return (zona, secao, sec) => (existe.has(`${zona}|${sec.l}`) ? sec.l : cadastro.get(`${zona}|${secao}`));
-}
-
 const FONTE_SECAO ='TSE — Dados abertos: votação por seção eleitoral (soma das seções)';
 
 async function consultar(p) {
@@ -206,8 +195,8 @@ let candidatosCache = null;
 async function listaCandidatos() {
   if (candidatosCache) return candidatosCache;
   const d = await carregar('candidatos.bin');
-  candidatosCache = d.lista.map(([id, nome, nomeCompleto, numero, ci, uf, partido, situacao, turno2]) => ({
-    c: { id, nome, nomeCompleto, numero, cargo: d.cargos[ci], uf, partido, situacao, turno2: !!turno2 },
+  candidatosCache = d.lista.map(([id, nome, nomeCompleto, numero, ci, uf, partido, situacao, turno2, foto]) => ({
+    c: { id, nome, nomeCompleto, numero, cargo: d.cargos[ci], uf, partido, situacao, turno2: !!turno2, foto: !!foto },
     k: `${normalizar(nome)} | ${normalizar(nomeCompleto)} | ${numero}`,
   }));
   return candidatosCache;
@@ -224,16 +213,53 @@ async function buscarCandidatos(texto) {
   return out.sort((a, b) => peso(a) - peso(b) || a.nome.localeCompare(b.nome, 'pt-BR')).slice(0, 25);
 }
 
-async function lideres(p) {
-  const turno = Number(p.turno || 1);
+// Mapa de densidade: votos do candidato e votos válidos em cada área (UF no mapa do Brasil,
+// município nos estados). Só há dados por município nas UFs detalhadas.
+async function densidade(p) {
   const ix = await indice();
-  if (![1, 2].includes(turno) || !ix.cargos.some(c => c.id === p.cargo) || (p.uf && !UF_OK.test(p.uf))) erro('Consulta de mapa inválida.');
-  // Partido líder e 3 mais votados por área (UF no mapa do Brasil; município nos estados).
-  const { lideres: dados, top3 } = await carregar(`mapa/lideres/${p.uf || 'BR'}/${turno}-${p.cargo}.bin`, 'Sem dados de mapa para esta combinação.');
-  const contagem = {};
-  for (const l of Object.values(dados)) if (l) contagem[l.sigla] = (contagem[l.sigla] || 0) + 1;
-  const ranking = Object.entries(contagem).sort((a, b) => b[1] - a[1]).map(([sigla, locais]) => ({ sigla, locais }));
-  return { lideres: dados, ranking, top3 };
+  const turno = Number(p.turno || 1);
+  const cargo = ix.cargos.find(c => c.id === p.cargo);
+  const uf = String(p.uf || '');
+  if (![1, 2].includes(turno) || !cargo || !/^\d{2,5}$/.test(String(p.numero || ''))) erro('Consulta de mapa inválida.');
+  if (uf ? !ix.ufs.some(u => u.sigla === uf) : !cargo.nacional) erro('Consulta de mapa inválida.');
+  if (uf && !ix.detalhadas.includes(uf)) throw new ErroApi('O mapa por município deste estado não está incluído nesta publicação.', 404);
+  const d = await carregar(`mapa/votos/${uf || 'BR'}/${turno}-${cargo.id}.bin`, 'Sem dados de mapa para esta combinação.');
+  const votos = d.votos[String(p.numero)] || {};
+  const areas = {};
+  let max = 0;
+  for (const [id, validos] of Object.entries(d.validos)) {
+    const v = votos[id] || 0;
+    const percentual = validos ? (v / validos) * 100 : 0;
+    areas[id] = { votos: v, validos, percentual };
+    if (percentual > max) max = percentual;
+  }
+  return { areas, max };
+}
+
+// Mapa do município: votos do candidato em cada local de votação. x, y = posição do local nas
+// coordenadas do mapa da UF (ausentes quando o TSE não informa latitude/longitude).
+async function densidadeLocais(p) {
+  const ix = await indice();
+  const turno = Number(p.turno || 1);
+  const cargo = ix.cargos.find(c => c.id === p.cargo);
+  if (![1, 2].includes(turno) || !cargo || !/^\d{2,5}$/.test(String(p.numero || ''))) erro('Consulta de mapa inválida.');
+  const M = await arquivoMun(String(p.uf || ''), String(p.mun || ''));
+  const d = await carregar(`mapa/l/${p.uf}/${p.mun}${cargo.proporcional ? '-p' : ''}.bin`, 'Sem dados por local de votação para este município.');
+  const c = d.c[`${turno}|${cargo.id}`];
+  const votos = new Map();
+  const lista = c?.n[String(p.numero)] || [];
+  for (let i = 0; i < lista.length; i += 2) votos.set(lista[i], lista[i + 1]);
+  const porChave = new Map(M.locais.map(l => [`${l.z}|${l.n}`, l]));
+  let max = 0;
+  const locais = d.l.map((k, i) => {
+    const l = porChave.get(k) || {};
+    const validos = c?.v[i] || 0, v = votos.get(i) || 0;
+    const percentual = validos ? (v / validos) * 100 : 0;
+    if (percentual > max) max = percentual;
+    return { id: k, z: l.z, n: l.n, nome: l.nome || `Local ${k}`, bairro: l.bairro || '', end: l.end || '', secoes: l.secoes || [], x: l.x, y: l.y, votos: v, validos, percentual };
+  });
+  // geo: áreas dos locais (índices em M.locais = mesma ordem de d.l) e fronteiras entre zonas.
+  return { locais, max, geo: M.geo || null };
 }
 
 async function locaisMun(p) {
@@ -265,7 +291,8 @@ const ROTAS = {
   '/api/resultado': consultar,
   '/api/mapa/brasil': () => carregar('mapa/brasil.bin'),
   '/api/mapa/uf': async p => { await arquivoUf(p.uf); return carregar(`mapa/${p.uf}.bin`); },
-  '/api/mapa/lideres': lideres,
+  '/api/mapa/candidato': densidade,
+  '/api/mapa/locais': densidadeLocais,
 };
 
 // Mesma assinatura usada pelas páginas: api(caminho, parâmetros).

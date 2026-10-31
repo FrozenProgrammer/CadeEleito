@@ -28,10 +28,10 @@
   <link rel="modulepreload" href="js/api.js">
   <link rel="modulepreload" href="js/estado.js">
   <link rel="modulepreload" href="js/grafico.js">
+  <link rel="modulepreload" href="js/compartilhar.js">
   <link rel="modulepreload" href="js/filtros.js">
   <link rel="modulepreload" href="js/paginas/comum.js">
   <link rel="modulepreload" href="js/paginas/resultados.js">
-  <link rel="modulepreload" href="js/paginas/graficos.js">
   <link rel="modulepreload" href="js/paginas/mapa.js">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -40,9 +40,17 @@
 
   <header class="topo">
     <div class="topo-interno">
+      <!-- Início: volta à página inicial com todos os filtros limpos (nova busca). -->
+      <a id="inicio" class="marca-topo" href="#/resultados" title="Início: nova busca">
+        <svg class="marca-topo-logo" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="27" cy="27" r="17" class="lg-s1" stroke-width="6"/>
+          <path d="M40 40 55 55" class="lg-s1" stroke-width="8" stroke-linecap="round"/>
+          <path d="M27 15.5a8 8 0 0 1 8 8c0 6.2-8 13.5-8 13.5s-8-7.3-8-13.5a8 8 0 0 1 8-8zM27 20.5a3 3 0 1 0 0 6a3 3 0 1 0 0-6z" fill-rule="evenodd" class="lg-f2"/>
+        </svg>
+        <span>Cadê o eleito?</span>
+      </a>
       <nav class="navegacao" aria-label="Páginas">
         <a data-pagina="resultados" href="#/resultados">Resultados</a>
-        <a data-pagina="graficos" href="#/graficos">Gráficos</a>
         <a data-pagina="mapa" href="#/mapa">Mapa</a>
         <a data-pagina="sobre" href="#/sobre">Sobre</a>
       </nav>
@@ -55,7 +63,7 @@
 
   <div class="heroi">
     <div class="heroi-interno">
-      <p class="heroi-sobre">Eleições Gerais · 4 e 25 de outubro de 2026</p>
+      <p class="heroi-sobre">Eleições 2026</p>
       <h1 class="titulo-marca">Cadê o eleito?
         <!-- Logo "lupa no mapa": procurar o eleito da sua região. O furo do alfinete é vazado (evenodd) para mostrar o fundo. -->
         <svg class="titulo-logo" viewBox="0 0 64 64" aria-hidden="true">
@@ -64,6 +72,7 @@
           <path d="M27 15.5a8 8 0 0 1 8 8c0 6.2-8 13.5-8 13.5s-8-7.3-8-13.5a8 8 0 0 1 8-8zM27 20.5a3 3 0 1 0 0 6a3 3 0 1 0 0-6z" fill-rule="evenodd" class="lg-f2"/>
         </svg>
       </h1>
+      <p class="heroi-lema">Descubra quantos votos da sua cidade foram para quem prometeu resolver tudo, menos os problemas reais.</p>
     </div>
   </div>
 
@@ -74,7 +83,6 @@
     <section id="filtros" class="filtros cartao" aria-label="Filtros"></section>
 
     <section id="pagina-resultados" class="pagina" aria-label="Resultados"></section>
-    <section id="pagina-graficos" class="pagina" aria-label="Gráficos" hidden></section>
     <section id="pagina-mapa" class="pagina" aria-label="Mapa" hidden></section>
 
     <section id="pagina-sobre" class="pagina" aria-label="Sobre os dados" hidden>
@@ -92,7 +100,7 @@
             <dt>Busca de candidatos</dt>
             <dd>Conjunto <em>Candidatos 2026</em> do TSE (nome de urna, nome completo, número, partido e situação).</dd>
             <dt>Mapa</dt>
-            <dd>Malhas territoriais do IBGE e o conjunto <em>Votação nominal por partido e município/zona 2026</em> do TSE.</dd>
+            <dd>Malhas territoriais do IBGE. A cor de cada município é o percentual dos votos válidos que o candidato buscado recebeu ali, calculado com a soma das seções do conjunto <em>Votação por seção eleitoral 2026</em>; no mapa do Brasil (Presidente), o resultado oficial de cada estado. Dentro do município, cada ponto é um local de votação, na latitude e longitude cadastradas pelo TSE (conjunto <em>Eleitorado por local de votação 2026</em>).</dd>
           </dl>
           <p id="sobre-geracao" class="recorte-sub"></p>
 
@@ -115,7 +123,7 @@
   <footer class="rodape">
     <div class="rodape-interno">
       <p>Cadê o eleito? · painel independente com dados abertos do <abbr title="Tribunal Superior Eleitoral">TSE</abbr> e malhas do <abbr title="Instituto Brasileiro de Geografia e Estatística">IBGE</abbr>.</p>
-      <p>Não é um site oficial da Justiça Eleitoral.</p>
+      <p>Site não oficial da Justiça Eleitoral.</p>
     </div>
   </footer>
 </body>
