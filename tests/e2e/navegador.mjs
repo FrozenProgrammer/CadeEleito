@@ -393,6 +393,34 @@ await caso('Desempenho do mapa: hover em camada única, sem filtros nas áreas, 
   verificar(r.ms < 150, `200 movimentos do mouse levaram ${r.ms.toFixed(0)} ms`);
 });
 
+await caso('Zoom pela roda do mouse: aproxima no cursor, abre o município sozinho e volta ao afastar', async () => {
+  const [id] = candSp;
+  await abrir(`#/mapa?cand=${id}&uf=SP`);
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-regiao").length > 600', 15000), 'mapa de SP não carregou');
+  verificar(await avaliar('return document.querySelectorAll("#pagina-mapa .mapa-zoom button").length === 3 && !document.querySelector("#pagina-mapa .mapa-dica").hidden'), 'botões de zoom ou dica ausentes');
+  // Centro da capital na tela (com o mapa rolado para a vista e a rolagem já parada).
+  const ponto = async () => avaliar(`
+    const p = [...document.querySelectorAll('#pagina-mapa .mapa-regiao')].find(a => /^São Paulo\\./.test(a.getAttribute('aria-label')));
+    const b = p.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 };`);
+  // Espera o mapa e o painel terminarem de carregar e animar (posições estáveis).
+  await aguardar('document.querySelector("#pagina-mapa .painel-kpis") && !document.getAnimations().some(a => a.playState === "running")', 8000);
+  await avaliar('document.querySelector("#pagina-mapa .mapa-pilha").scrollIntoView({ block: "center" }); return 1');
+  await espera(500);
+  const roda = async (deltaY, { x, y }) => cmd('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY });
+  const vb0 = await avaliar('return document.querySelector("#pagina-mapa .mapa-svg").getAttribute("viewBox")');
+  const alvo = await ponto();
+  await roda(-120, alvo); await espera(120);
+  verificar(await avaliar(`return document.querySelector("#pagina-mapa .mapa-svg").getAttribute("viewBox") !== ${JSON.stringify(vb0)} && document.querySelector("#pagina-mapa .mapa-pilha").classList.contains("ampliado")`), 'a roda não aproximou o mapa');
+  verificar(await avaliar('const t = document.querySelector("#pagina-mapa .mapa-svg"), m = document.querySelector("#pagina-mapa .mapa-topo"); return t.getAttribute("viewBox") === m.getAttribute("viewBox")'), 'as camadas do mapa ficaram com zoom diferente');
+  for (let k = 0; k < 40 && !(await avaliar('return location.hash.includes("mun=")')); k++) { await roda(-240, alvo); await espera(60); }
+  verificar(await aguardar(`location.hash.includes("mun=${capitalSp.cd}") && document.querySelector("#pagina-mapa .mapa-pilha-municipio")`, 15000), 'aproximar não abriu o município sob o cursor');
+  await espera(800);
+  // Afastar além do mapa inteiro volta ao estado.
+  const meio = await avaliar('const b = document.querySelector("#pagina-mapa .mapa-pilha").getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }');
+  for (let k = 0; k < 20 && (await avaliar('return location.hash.includes("mun=")')); k++) { await roda(240, meio); await espera(60); }
+  verificar(await aguardar('!location.hash.includes("mun=") && document.querySelectorAll("#pagina-mapa .mapa-regiao").length > 600', 15000), 'afastar não voltou ao mapa do estado');
+});
+
 await caso('Página inicial: sem botão "Compartilhar", fonte abaixo do mapa e zoom no município', async () => {
   await abrir(`#/resultados?cand=${govAc[0]}&uf=AC&mun=${ac.cd}`);
   verificar(await aguardar('document.querySelector(".cartao-social") && document.querySelector("#pagina-resultados .mapa-pilha-municipio .mapa-celula")', 15000), 'cartão/mapa do município não apareceram');

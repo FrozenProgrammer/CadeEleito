@@ -83,6 +83,12 @@ function caixa(d) {
 
 let instancias = 0; // ids únicos (clip-path) quando há dois mapas na página
 
+// Momento da última rolagem da página: a roda do mouse que vinha rolando a página e "passa" por
+// cima do mapa continua rolando a página, em vez de virar zoom de repente.
+let ultimaRolagem = 0;
+globalThis.addEventListener?.('scroll', () => { ultimaRolagem = performance.now(); }, { passive: true });
+const semAnimacao = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
 export function criarPaginaMapa(raiz) {
   const instancia = ++instancias;
   const titulo1 = h('h2');
@@ -90,6 +96,7 @@ export function criarPaginaMapa(raiz) {
   const voltar = h('button', { type: 'button', class: 'botao-secundario', hidden: true }, icone('voltar'), h('span'));
   const modoSel = h('div', { class: 'segmentado modo-mapa', role: 'radiogroup', 'aria-label': 'Dividir o mapa do município por', hidden: true });
   const area = h('div', { class: 'mapa-area' });
+  const ajuda = h('p', { class: 'mapa-dica', hidden: true, text: 'Role sobre o mapa (ou use + e −) para aproximar: chegando perto, o estado ou a cidade abre sozinho. Arraste para mover.' });
   const leg = h('div', { class: 'mapa-legenda' });
   const tabela = h('div', { class: 'mapa-tabela' });
   const painel = h('div', { class: 'mapa-painel-conteudo' });
@@ -98,7 +105,7 @@ export function criarPaginaMapa(raiz) {
     h('div', { class: 'mapa-layout' },
       h('section', { class: 'cartao mapa-cartao' },
         h('div', { class: 'cartao-topo' }, h('div', {}, titulo1, subtitulo), voltar, modoSel),
-        area, leg, tabela),
+        area, ajuda, leg, tabela),
       h('aside', { class: 'cartao mapa-painel', 'aria-live': 'polite' }, painel))));
 
   let seq = 0;
@@ -108,6 +115,9 @@ export function criarPaginaMapa(raiz) {
   let atual = null; // { nivel, modo, cand, cargo, itens, areas } do último desenho
   let atualCand = null;
   let modo = null; // mapa do município: 'zonas' | 'locais' (null = automático)
+  // Troca de nível feita pelo zoom: { de } = id do lugar de onde se saiu (o novo mapa começa nele).
+  let porZoom = null, chegada = null;
+  const trocarPorZoom = (mudanca, de = '') => { porZoom = { de }; definir(mudanca); };
 
   const nivelAtual = () => (!estado.uf ? 'brasil' : estado.mun && contexto.config.detalhadas.includes(estado.uf) ? 'municipio' : 'uf');
   const idSelecionado = () => (atual?.nivel === 'municipio'
@@ -168,6 +178,7 @@ export function criarPaginaMapa(raiz) {
   async function desenhar() {
     const minha = ++seq;
     const nivel = nivelAtual();
+    chegada = porZoom; porZoom = null;
     const cargo = contexto.config.cargos.find(c => c.id === estado.cargo);
     const cand = candidatoDoMapa(cargo);
     atualCand = cand;
@@ -180,6 +191,7 @@ export function criarPaginaMapa(raiz) {
     voltar.onclick = () => definir(nivel === 'municipio' ? { mun: '' } : { uf: '' });
     titulo1.textContent = nivel === 'brasil' ? 'Brasil' : nomeUf;
     limpar(area, esqueleto(3));
+    ajuda.hidden = true;
     limpar(leg); limpar(tabela);
     atual = null;
     dePorId = new Map();
@@ -203,6 +215,7 @@ export function criarPaginaMapa(raiz) {
       const svg = nivel === 'municipio' ? desenharMunicipio(malha, ok ? dens : null) : desenharAreas(nivel, malha, ok ? dens : null);
       if (!svg) return;
       limpar(area, svg);
+      ajuda.hidden = !svg.classList.contains('mapa-pilha');
       destacarSelecao();
       if (dens?.falha) {
         const e = dens.falha;
@@ -240,6 +253,151 @@ export function criarPaginaMapa(raiz) {
     const el = h('div', { class: `mapa-pilha ${classe || ''}` }, base, topo);
     return { el, camadas };
   }
+
+  // Zoom: roda do mouse (no ponto do cursor), arrastar para mover, pinça no toque e botões + / −.
+  // Muda o viewBox das duas camadas da pilha, então o desenho continua nítido em qualquer zoom.
+  // O mapa troca de nível sozinho: aproximar bastante de um estado ou município abre esse lugar
+  // (entrar) e afastar além do mapa inteiro volta ao nível de cima (sair).
+  //   entrar(clientX, clientY, caixaVisivel) -> true se trocou de nível
+  //   inicial: caixa de onde o zoom começa (ao voltar de um nível, parte do lugar de onde se saiu)
+  function ampliar(el, viewBox, { entrar, sair, maximo = 40, inicial }) {
+    const svgs = [...el.querySelectorAll(':scope > svg')];
+    const [x0, y0, w0, h0] = viewBox.split(/\s+/).map(Number);
+    const vb = { x: x0, y: y0, w: w0, h: h0 };
+    let quadro = 0, animacao = 0, trocou = false, afastar = 0, moveu = false, inicio = null;
+    let usou = !!chegada; // só volta de nível ao afastar quem já está navegando pelo zoom
+    const ponteiros = new Map();
+    const z = () => w0 / vb.w;
+
+    const botao = (rotulo, texto, acao) => h('button', { type: 'button', class: 'mapa-zoom-botao', 'aria-label': rotulo, title: rotulo, onclick: acao }, texto);
+    const mais = botao('Aproximar', '+', () => { const [cx, cy] = centro(), alvo = caixaZoom(cx, cy, 1.8); usou = true; animarPara(alvo); tentarEntrar(cx, cy, alvo); });
+    const menos = botao('Afastar', '−', () => {
+      if (z() <= 1.001) { usou = true; tentarSair(); return; }
+      const [cx, cy] = centro(); animarPara(caixaZoom(cx, cy, 1 / 1.8));
+    });
+    const tudo = botao('Ver o mapa inteiro', '⤢', () => animarPara({ x: x0, y: y0, w: w0, h: h0 }));
+    el.append(h('div', { class: 'mapa-zoom' }, mais, menos, tudo));
+
+    function aplicar() {
+      quadro = 0;
+      const texto = `${vb.x.toFixed(2)} ${vb.y.toFixed(2)} ${vb.w.toFixed(2)} ${vb.h.toFixed(2)}`;
+      for (const s of svgs) s.setAttribute('viewBox', texto);
+      el.style.setProperty('--z', z().toFixed(3)); // rótulos mantêm o tamanho na tela (css)
+      el.classList.toggle('ampliado', z() > 1.001);
+      menos.disabled = z() <= 1.001 && !sair;
+      tudo.hidden = z() <= 1.001;
+    }
+    const agendar = () => { if (!quadro) quadro = requestAnimationFrame(aplicar); };
+    function animarPara(alvo, ms = 280) {
+      cancelAnimationFrame(animacao);
+      if (semAnimacao()) ms = 0;
+      const de = { ...vb }, t0 = performance.now();
+      const passo = t => {
+        const p = ms ? Math.min(1, (t - t0) / ms) : 1, e = 1 - (1 - p) ** 3;
+        for (const k of ['x', 'y', 'w', 'h']) vb[k] = de[k] + (alvo[k] - de[k]) * e;
+        aplicar();
+        if (p < 1) animacao = requestAnimationFrame(passo);
+      };
+      animacao = requestAnimationFrame(passo);
+    }
+    // Tela -> coordenadas do mapa (preserveAspectRatio "meet": o desenho fica centrado na caixa).
+    function ponto(cx, cy) {
+      const r = svgs[0].getBoundingClientRect();
+      const k = Math.min(r.width / vb.w, r.height / vb.h);
+      return { x: vb.x + (cx - r.left - (r.width - vb.w * k) / 2) / k, y: vb.y + (cy - r.top - (r.height - vb.h * k) / 2) / k, k };
+    }
+    const centro = () => { const r = svgs[0].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+    // O centro da vista nunca sai do mapa; no zoom mínimo, o mapa inteiro.
+    function limitar(c) {
+      c.w = Math.min(w0, Math.max(w0 / maximo, c.w)); c.h = (c.w * h0) / w0;
+      if (c.w >= w0 - 1e-6) return Object.assign(c, { x: x0, y: y0 });
+      c.x = Math.min(x0 + w0 - c.w / 2, Math.max(x0 - c.w / 2, c.x));
+      c.y = Math.min(y0 + h0 - c.h / 2, Math.max(y0 - c.h / 2, c.y));
+      return c;
+    }
+    // Caixa depois de um zoom de fator f em volta do ponto da tela (cx, cy): o ponto fica parado.
+    function caixaZoom(cx, cy, f) {
+      const p = ponto(cx, cy);
+      const w = Math.min(w0, Math.max(w0 / maximo, vb.w / f)), g = vb.w / w;
+      return limitar({ x: p.x - (p.x - vb.x) / g, y: p.y - (p.y - vb.y) / g, w });
+    }
+    function tentarEntrar(cx, cy, caixaNova) {
+      if (!trocou && entrar && entrar(cx, cy, caixaNova)) trocou = true;
+    }
+    function tentarSair() {
+      if (!trocou && sair) { trocou = true; sair(); }
+    }
+
+    el.addEventListener('wheel', e => {
+      if (performance.now() - ultimaRolagem < 350) return; // a página estava rolando: continua
+      if (trocou) { e.preventDefault(); return; }
+      // deltaMode: 0 pixels, 1 linhas, 2 páginas; ctrl + roda = pinça do touchpad (deltas pequenos).
+      const passo = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1) * (e.ctrlKey ? 5 : 1);
+      const f = Math.exp(-passo * 0.0022);
+      if (f < 1 && z() <= 1.001) {
+        if (!sair || !usou) return; // nada a afastar: a roda volta a rolar a página
+        e.preventDefault();
+        afastar += -Math.log(f);
+        if (afastar > 0.6) tentarSair();
+        return;
+      }
+      e.preventDefault();
+      cancelAnimationFrame(animacao);
+      afastar = 0;
+      if (f > 1) usou = true;
+      Object.assign(vb, caixaZoom(e.clientX, e.clientY, f));
+      agendar();
+      if (f > 1) tentarEntrar(e.clientX, e.clientY, vb);
+    }, { passive: false });
+
+    // Arrastar (com zoom) e pinça (dois dedos).
+    el.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || e.target.closest('.mapa-zoom')) return;
+      ponteiros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ponteiros.size === 1) { inicio = { x: e.clientX, y: e.clientY }; moveu = false; }
+    });
+    el.addEventListener('pointermove', e => {
+      const antes = ponteiros.get(e.pointerId);
+      if (!antes) return;
+      if (ponteiros.size === 2) {
+        const [a, b] = [...ponteiros.values()];
+        const d0 = Math.hypot(a.x - b.x, a.y - b.y);
+        ponteiros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const [c, d] = [...ponteiros.values()];
+        const d1 = Math.hypot(c.x - d.x, c.y - d.y), mx = (c.x + d.x) / 2, my = (c.y + d.y) / 2;
+        if (d0 > 0) {
+          usou = true; moveu = true;
+          Object.assign(vb, caixaZoom(mx, my, d1 / d0)); agendar();
+          if (d1 > d0) tentarEntrar(mx, my, vb);
+        }
+        return;
+      }
+      ponteiros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (z() <= 1.001) return; // sem zoom não há o que mover
+      if (!moveu && Math.hypot(e.clientX - inicio.x, e.clientY - inicio.y) < 5) return;
+      if (!moveu) { moveu = true; el.setPointerCapture(e.pointerId); cancelAnimationFrame(animacao); }
+      const k = ponto(0, 0).k;
+      Object.assign(vb, limitar({ x: vb.x - (e.clientX - antes.x) / k, y: vb.y - (e.clientY - antes.y) / k, w: vb.w }));
+      agendar();
+    });
+    const soltar = e => ponteiros.delete(e.pointerId);
+    el.addEventListener('pointerup', soltar);
+    el.addEventListener('pointercancel', soltar);
+    // Depois de arrastar, soltar o botão não conta como clique na área embaixo do cursor.
+    el.addEventListener('click', e => { if (moveu) { moveu = false; e.stopPropagation(); } }, true);
+
+    aplicar();
+    // Voltando de um nível: começa no lugar de onde se saiu e afasta até o mapa inteiro.
+    if (inicial) {
+      const pad = Math.max(inicial.w, inicial.h * (w0 / h0)) * 0.15;
+      Object.assign(vb, limitar({ x: inicial.x0 - pad, y: inicial.y0 - pad, w: Math.max(inicial.w, inicial.h * (w0 / h0)) + 2 * pad }));
+      aplicar();
+      animarPara({ x: x0, y: y0, w: w0, h: h0 }, 550);
+    }
+  }
+
+  // Ao aproximar: abre o lugar sob o cursor se ele já ocupa boa parte da vista.
+  const ocupaVista = (d, vista) => { const b = caixa(d); return Math.max(b.w / vista.w, b.h / vista.h) >= 0.4; };
 
   // alvos[i] = { d (destaque), conteudo() (tooltip, criado no 1º hover), escolher() }
   // alvoEm(evento) -> índice em alvos ou -1.
@@ -301,10 +459,24 @@ export function criarPaginaMapa(raiz) {
     });
     svg.append(grupo);
     if (nacional) svg.append(h('svg:g', { class: 'mapa-rotulos', 'aria-hidden': 'true' }, itens.map(it => h('svg:text', { x: it.cx, y: it.cy, text: it.id }))));
-    const { el, camadas } = pilha(malha.viewBox, svg, '');
+    const { el, camadas } = pilha(malha.viewBox, svg, chegada ? (chegada.de ? 'saida-zoom' : 'por-zoom') : '');
     interagir(svg, camadas, alvos, e => {
       const p = e.target.closest?.('[data-i]');
       return p && svg.contains(p) ? Number(p.dataset.i) : -1;
+    });
+    // Zoom: o estado (ou município, se o estado tem mapa por local) sob o cursor abre sozinho.
+    const abreMunicipio = contexto.config.detalhadas.includes(estado.uf);
+    ampliar(el, malha.viewBox, {
+      maximo: nacional ? 40 : 120,
+      inicial: chegada?.de && dePorId.has(chegada.de) ? caixa(dePorId.get(chegada.de)) : null,
+      sair: nacional || voltar.hidden ? null : () => trocarPorZoom({ uf: '' }, estado.uf),
+      entrar: nacional || abreMunicipio ? (cx, cy, vista) => {
+        const p = document.elementFromPoint(cx, cy)?.closest?.('[data-i]');
+        const it = p && svg.contains(p) ? itens[Number(p.dataset.i)] : null;
+        if (!it || !ocupaVista(it.d, vista)) return false;
+        trocarPorZoom(nacional ? { uf: it.id } : { mun: it.id });
+        return true;
+      } : null,
     });
     return Object.assign(el, { itens, areas, escala });
   }
@@ -406,6 +578,7 @@ export function criarPaginaMapa(raiz) {
       svg.append(rotulos);
     }
     const { el, camadas } = pilha(viewBox, svg, `mapa-pilha-municipio ${porZona ? 'modo-zonas' : 'modo-locais'}`, corte, mun.d);
+    ampliar(el, viewBox, { maximo: 40, sair: () => trocarPorZoom({ mun: '' }, estado.mun) });
     // Ponto do mouse -> coordenadas do mapa -> local de votação mais próximo (= área que o contém).
     const xs = Float64Array.from(celulas, cel => cel.x), ys = Float64Array.from(celulas, cel => cel.y);
     interagir(svg, camadas, alvos, e => {
@@ -467,7 +640,7 @@ export function criarPaginaMapa(raiz) {
       const chave = [estado.uf, nivel === 'municipio' ? estado.mun : '', estado.cargo, estado.turno, estado.cand].join('|');
       // Outro município (ou outro nível): a divisão volta ao automático.
       if (chave.split('|').slice(0, 2).join('|') !== chaveMapa.split('|').slice(0, 2).join('|')) modo = null;
-      if (chave !== chaveMapa) { chaveMapa = chave; desenhar(); } else { destacarSelecao(); desenharPainel(); }
+      if (chave !== chaveMapa) { chaveMapa = chave; desenhar(); } else { porZoom = null; destacarSelecao(); desenharPainel(); }
     },
   };
 }

@@ -20,6 +20,9 @@
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="css/app.css">
+  <!-- Fontes do próprio site (licença OFL): Newsreader nos títulos, Inter no texto. -->
+  <link rel="preload" href="fonts/newsreader-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <!-- Aplica o tema salvo (claro/escuro) antes de desenhar a página, sem piscar. -->
   <script src="js/tema.js"></script>
   <!-- Baixa todos os módulos em paralelo (sem esperar um importar o outro). -->
@@ -73,6 +76,12 @@
         </svg>
       </h1>
       <p class="heroi-lema">Descubra quantos votos da sua cidade foram para quem prometeu resolver tudo, menos os problemas reais.</p>
+      <!-- Linha de edição, como no cabeçalho de um jornal. -->
+      <ul class="heroi-linha" aria-label="Sobre esta edição">
+        <li>Edição especial</li>
+        <li>Dados oficiais do <abbr title="Tribunal Superior Eleitoral">TSE</abbr></li>
+        <li>Seção por seção</li>
+      </ul>
     </div>
   </div>
 
