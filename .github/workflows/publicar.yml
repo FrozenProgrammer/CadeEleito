@@ -1,0 +1,65 @@
+# Gera o site completo (todas as UFs) nos servidores do GitHub e publica no GitHub Pages.
+# Execute em: Actions › "Gerar e publicar site" › Run workflow.
+name: Gerar e publicar site
+
+on:
+  workflow_dispatch:
+
+# Mínimo privilégio: por padrão nenhum job pode escrever; só o job de publicação recebe o token do Pages.
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  gerar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Guarda os índices já processados: execuções seguintes não baixam tudo de novo.
+      - uses: actions/cache@v4
+        with:
+          path: .cache-brazil-eleicoes-2026
+          key: dados-tse-2026-${{ github.run_id }}
+          restore-keys: dados-tse-2026-
+
+      - name: Gerar site (BR + 27 UFs)
+        run: npm run gerar -- todos
+        env:
+          # Defina em Settings › Secrets and variables › Actions › Variables (ex.: https://usuario.github.io/repositorio)
+          BR_ELEICOES_SITE_URL: ${{ vars.SITE_URL }}
+
+      - name: Conferir somas contra o total oficial (amostra)
+        run: |
+          npm run verificar -- AC governador 1
+          npm run verificar -- DF presidente 2
+
+      - name: Testes (regras de apuração, segurança e integridade dos dados)
+        run: npm test
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  publicar:
+    needs: gerar
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
