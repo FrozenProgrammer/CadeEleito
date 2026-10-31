@@ -26,8 +26,11 @@ jobs:
         with:
           node-version: 22
 
-      # Guarda os índices já processados: execuções seguintes não baixam tudo de novo.
-      - uses: actions/cache@v4
+      # Dados já baixados e processados do TSE: execuções seguintes não baixam tudo de novo.
+      # Restaurar e salvar em passos separados: o "actions/cache" comum só salva se tudo der certo,
+      # e uma falha no meio jogaria fora horas de download.
+      - name: Restaurar dados já baixados
+        uses: actions/cache/restore@v4
         with:
           path: .cache-brazil-eleicoes-2026
           key: dados-tse-2026-${{ github.run_id }}
@@ -38,6 +41,13 @@ jobs:
         env:
           # Defina em Settings › Secrets and variables › Actions › Variables (ex.: https://usuario.github.io/repositorio)
           BR_ELEICOES_SITE_URL: ${{ vars.SITE_URL }}
+
+      - name: Salvar dados baixados (mesmo se a geração falhar)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache-brazil-eleicoes-2026
+          key: dados-tse-2026-${{ github.run_id }}
 
       - name: Conferir somas contra o total oficial (amostra)
         run: |

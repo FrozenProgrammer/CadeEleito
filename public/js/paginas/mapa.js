@@ -102,8 +102,9 @@ export function criarPaginaMapa(raiz) {
       h('aside', { class: 'cartao mapa-painel', 'aria-live': 'polite' }, painel))));
 
   let seq = 0;
-  let marcas = new Map(); // elemento SVG -> { ids: Set(ids que ele representa), d: contorno para o destaque }
-  let camadaSelecao = null; // contorno do item escolhido (uma camada por cima das áreas)
+  let dePorId = new Map(); // id (UF, município ou local) -> contorno, para desenhar a seleção
+  let apagaveis = new Map(); // caminho de zona -> id da zona (as outras zonas se apagam ao escolher uma)
+  let camadaSelecao = null; // contorno do item escolhido (na camada de cima)
   let atual = null; // { nivel, modo, cand, cargo, itens, areas } do último desenho
   let atualCand = null;
   let modo = null; // mapa do município: 'zonas' | 'locais' (null = automático)
@@ -113,18 +114,13 @@ export function criarPaginaMapa(raiz) {
     ? (atual.modo === 'zonas' ? estado.zona : estado.local ? `${estado.zona}|${estado.local}` : '')
     : atual?.nivel === 'uf' ? estado.mun : '');
 
-  // Zona escolhida: as outras zonas (grupos) ficam apagadas. Município/local escolhido: contorno
-  // desenhado na camada de seleção (sem mexer na ordem nem no estilo de milhares de áreas).
+  // Zona escolhida: as outras zonas (um caminho cada) ficam apagadas. Município/local escolhido:
+  // contorno na camada de cima (sem mexer no estilo das áreas do mapa).
   function destacarSelecao() {
     const alvo = idSelecionado();
-    const zonas = atual?.nivel === 'municipio' && atual.modo === 'zonas';
-    let d = '';
-    for (const [el, info] of marcas) {
-      const sel = !!alvo && info.ids.has(alvo);
-      if (zonas) el.classList.toggle('apagada', !!alvo && !sel);
-      else if (sel) d = info.d;
-    }
+    for (const [el, id] of apagaveis) el.classList.toggle('apagada', !!alvo && id !== alvo);
     if (!camadaSelecao) return;
+    const d = apagaveis.size ? '' : (alvo && dePorId.get(alvo)) || '';
     if (d) camadaSelecao.setAttribute('d', d); else camadaSelecao.removeAttribute('d');
   }
 
@@ -186,7 +182,8 @@ export function criarPaginaMapa(raiz) {
     limpar(area, esqueleto(3));
     limpar(leg); limpar(tabela);
     atual = null;
-    marcas = new Map();
+    dePorId = new Map();
+    apagaveis = new Map();
     camadaSelecao = null;
     const unidadeNome = { brasil: 'estado', uf: 'município', municipio: 'local de votação' }[nivel];
     subtitulo.textContent = cand
@@ -224,41 +221,61 @@ export function criarPaginaMapa(raiz) {
     }
   }
 
-  // Interação do mapa com um só conjunto de eventos no <svg> (delegação), em vez de 3–4 por área:
-  // estados e cidades grandes têm milhares de áreas. Cada área tem data-i (índice em `alvos`).
-  // O destaque ao passar o mouse é UMA camada por cima (o contorno/tinta da área), sem filtros CSS
-  // nas áreas, que forçam o navegador a repintar o mapa inteiro.
-  // alvos[i] = { texto, conteudo() (tooltip, criado só no 1º hover), escolher(), d (destaque) }
-  function interagir(svg, alvos, camadas) {
-    let ultimo = -1;
-    const destaque = h('svg:path', { class: 'mapa-hover', 'aria-hidden': 'true' });
-    const selecao = h('svg:path', { class: 'mapa-selecao', 'aria-hidden': 'true' });
+  // ---------------------------------------------------------------------------------------------
+  // Desenho leve (pensado para cidades com milhares de áreas, como a capital paulista):
+  //  • "pilha" de dois SVGs: o mapa colorido fica numa camada própria do navegador (will-change),
+  //    pintada uma vez; o destaque do mouse e a seleção ficam num SVG fino por cima. Passar o
+  //    mouse só repinta essa camada de cima, nunca as milhares de áreas.
+  //  • um só conjunto de eventos e no máximo um processamento por quadro (requestAnimationFrame);
+  //  • no município, o "o que está sob o mouse" é calculado (local de votação mais próximo = a
+  //    área de Voronoi que contém o ponto), sem o navegador testar forma por forma, e as áreas
+  //    são agrupadas num caminho por zona (modo zonas) ou por cor (modo locais).
+
+  // corte/dCorte: recorte pelo contorno do município (o destaque não vaza para fora da cidade).
+  function pilha(viewBox, base, classe, corte, dCorte) {
+    const camadas = h('svg:g', corte ? { 'clip-path': `url(#${corte}-t)` } : {});
+    const topo = h('svg:svg', { viewBox, class: 'mapa-topo', 'aria-hidden': 'true', focusable: 'false' },
+      corte ? h('svg:defs', {}, h('svg:clipPath', { id: `${corte}-t` }, h('svg:path', { d: dCorte }))) : null,
+      camadas);
+    const el = h('div', { class: `mapa-pilha ${classe || ''}` }, base, topo);
+    return { el, camadas };
+  }
+
+  // alvos[i] = { d (destaque), conteudo() (tooltip, criado no 1º hover), escolher() }
+  // alvoEm(evento) -> índice em alvos ou -1.
+  function interagir(base, camadas, alvos, alvoEm) {
+    let ultimo = -1, pendente = null, quadro = 0;
+    const destaque = h('svg:path', { class: 'mapa-hover' });
+    const selecao = h('svg:path', { class: 'mapa-selecao' });
     camadas.append(destaque, selecao);
-    const alvoDe = e => {
-      const el = e.target.closest?.('[data-i]');
-      return el && svg.contains(el) ? Number(el.dataset.i) : -1;
-    };
     const conteudo = i => (alvos[i].cache ||= alvos[i].conteudo());
-    const sair = () => { ultimo = -1; destaque.removeAttribute('d'); esconderTooltip(); };
-    svg.addEventListener('mousemove', e => {
-      const i = alvoDe(e);
-      if (i < 0) return sair();
+    const sair = () => {
+      if (quadro) { cancelAnimationFrame(quadro); quadro = 0; }
+      pendente = null; ultimo = -1; destaque.removeAttribute('d'); esconderTooltip();
+    };
+    const processar = () => {
+      quadro = 0;
+      const e = pendente; pendente = null;
+      if (!e) return;
+      const i = alvoEm(e);
+      if (i < 0) { ultimo = -1; destaque.removeAttribute('d'); esconderTooltip(); return; }
       if (i !== ultimo) { ultimo = i; destaque.setAttribute('d', alvos[i].d); }
       mostrarTooltip(e, conteudo(i));
-    });
-    svg.addEventListener('mouseleave', sair);
-    svg.addEventListener('click', e => { const i = alvoDe(e); if (i >= 0) { sair(); alvos[i].escolher(); } });
+    };
+    base.addEventListener('mousemove', e => { pendente = e; if (!quadro) quadro = requestAnimationFrame(processar); });
+    base.addEventListener('mouseleave', sair);
+    base.addEventListener('click', e => { const i = alvoEm(e); if (i >= 0) { sair(); alvos[i].escolher(); } });
     // Teclado (as 27 UFs são focáveis): Enter/Espaço escolhe; o foco mostra o tooltip.
-    svg.addEventListener('keydown', e => {
-      const i = alvoDe(e);
+    base.addEventListener('keydown', e => {
+      const i = alvoEm(e);
       if (i >= 0 && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); sair(); alvos[i].escolher(); }
     });
-    svg.addEventListener('focusin', e => { const i = alvoDe(e); if (i >= 0) { destaque.setAttribute('d', alvos[i].d); mostrarTooltip(e, conteudo(i)); } });
-    svg.addEventListener('focusout', sair);
+    base.addEventListener('focusin', e => { const i = alvoEm(e); if (i >= 0) { destaque.setAttribute('d', alvos[i].d); mostrarTooltip(e, conteudo(i)); } });
+    base.addEventListener('focusout', sair);
     camadaSelecao = selecao;
   }
 
-  // Brasil (UFs) ou estado (municípios).
+  // Brasil (UFs) ou estado (municípios): poucas centenas de áreas, uma por caminho (data-i).
   function desenharAreas(nivel, malha, dens) {
     const nacional = nivel === 'brasil';
     const itens = nacional ? malha.ufs.map(u => ({ id: u.uf, nome: u.nome, d: u.d, cx: u.cx, cy: u.cy })) : malha.municipios.map(m => ({ id: m.cd, nome: titulo(m.nm), d: m.d }));
@@ -275,24 +292,26 @@ export function criarPaginaMapa(raiz) {
         conteudo: () => (dens ? dica(it.nome, a).el : dica(it.nome, null).el.firstChild),
         escolher: () => (nacional ? definir({ uf: it.id }) : definir({ mun: it.id })),
       });
-      const p = h('svg:path', {
+      grupo.append(h('svg:path', {
         d: it.d, class: `mapa-regiao ${dens ? classeDensidade(a, escala.topo) : 'mapa-neutro'}`, 'aria-label': dens ? texto : it.nome, 'data-i': i,
         // Teclado: só as 27 UFs viram paradas de Tab; municípios são escolhidos pelo filtro ou pela tabela.
         tabindex: nacional ? '0' : undefined, role: nacional ? 'button' : undefined,
-      });
-      marcas.set(p, { ids: new Set([it.id]), d: it.d });
-      grupo.append(p);
+      }));
+      dePorId.set(it.id, it.d);
     });
-    const camadas = h('svg:g', { class: 'mapa-camadas' });
-    svg.append(grupo, camadas);
+    svg.append(grupo);
     if (nacional) svg.append(h('svg:g', { class: 'mapa-rotulos', 'aria-hidden': 'true' }, itens.map(it => h('svg:text', { x: it.cx, y: it.cy, text: it.id }))));
-    interagir(svg, alvos, camadas);
-    return Object.assign(svg, { itens, areas, escala });
+    const { el, camadas } = pilha(malha.viewBox, svg, '');
+    interagir(svg, camadas, alvos, e => {
+      const p = e.target.closest?.('[data-i]');
+      return p && svg.contains(p) ? Number(p.dataset.i) : -1;
+    });
+    return Object.assign(el, { itens, areas, escala });
   }
 
   // Município: áreas dos locais de votação (Voronoi, recortadas pelo contorno da cidade).
-  // Modo "zonas": cada área pinta com o % da sua zona eleitoral, com fronteiras e números das zonas.
-  // Modo "locais": cada área pinta com o % do próprio local de votação.
+  // Modo "zonas": cada zona é UM caminho (todas as suas áreas), com fronteiras e números.
+  // Modo "locais": um caminho por degrau de cor (todas as áreas daquela cor) + a malha das divisas.
   function desenharMunicipio(malha, dens) {
     const mun = malha.municipios.find(m => m.cd === estado.mun);
     const nomeMun = titulo(mun?.nm || contexto.municipios.find(m => m.cd === estado.mun)?.nm || 'Município');
@@ -317,7 +336,7 @@ export function criarPaginaMapa(raiz) {
       for (const l of ls) { cont.set(l.z, (cont.get(l.z) || 0) + 1); comArea.add(l); }
       const z = [...cont].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0];
       const votos = ls.reduce((s, l) => s + l.votos, 0), validos = ls.reduce((s, l) => s + l.validos, 0);
-      return { d, ls, z, votos, validos, percentual: validos ? (votos / validos) * 100 : 0 };
+      return { d, ls, z, x: ls[0]?.x, y: ls[0]?.y, votos, validos, percentual: validos ? (votos / validos) * 100 : 0 };
     }).filter(cel => cel.ls.length) : [];
     if (!modo || !['zonas', 'locais'].includes(modo)) modo = new Set(celulas.map(cel => cel.z)).size > 1 ? 'zonas' : 'locais';
     const porZona = modo === 'zonas';
@@ -336,42 +355,44 @@ export function criarPaginaMapa(raiz) {
 
     const c = caixa(mun.d);
     const pad = Math.max(c.w, c.h) * 0.04;
+    const viewBox = `${c.x0 - pad} ${c.y0 - pad} ${c.w + 2 * pad} ${c.h + 2 * pad}`;
     const corte = `corte-${instancia}-${estado.mun}`;
-    const svg = h('svg:svg', { viewBox: `${c.x0 - pad} ${c.y0 - pad} ${c.w + 2 * pad} ${c.h + 2 * pad}`, class: `mapa-svg mapa-municipio ${porZona ? 'modo-zonas' : 'modo-locais'}`, role: 'group', 'aria-label': `Mapa: ${nomeMun}, por ${unidade}` },
+    const svg = h('svg:svg', { viewBox, class: 'mapa-svg mapa-municipio', role: 'img', 'aria-label': `Mapa de ${nomeMun} por ${unidade}. Os números exatos estão na tabela abaixo do mapa.` },
       h('svg:defs', {}, h('svg:clipPath', { id: corte }, h('svg:path', { d: mun.d }))));
     const grupo = h('svg:g', { class: 'mapa-areas', 'clip-path': `url(#${corte})` });
     const alvos = [];
+    const alvoDaCelula = new Int32Array(celulas.length);
     const escolherZona = zn => definir(estado.zona === zn.id && !estado.local ? { zona: '', local: '', bairro: '' } : { zona: zn.id, local: '', secao: '', bairro: '' });
     const escolherLocal = l => definir(estado.local === String(l.n) && estado.zona === String(l.z) ? { zona: '', local: '', bairro: '' } : { zona: String(l.z), local: String(l.n), secao: '', bairro: '' });
     if (porZona) {
-      // Um <g> por zona: apagar as outras zonas muda a opacidade de poucos grupos, não de milhares de áreas.
-      for (const cel of celulas) zonas.get(cel.z).celulas.push(cel);
+      celulas.forEach((cel, k) => zonas.get(cel.z).celulas.push(k));
       for (const zn of zonas.values()) {
         if (!zn.celulas.length) continue;
         const i = alvos.length;
-        const dZona = zn.celulas.map(cel => cel.d).join('');
+        const dZona = zn.celulas.map(k => celulas[k].d).join('');
+        for (const k of zn.celulas) alvoDaCelula[k] = i;
         alvos.push({ d: dZona, conteudo: () => dica(zn.nome, dens ? zn : null, zn.detalhe).el, escolher: () => escolherZona(zn) });
-        const classe = `mapa-celula ${dens ? classeDensidade(zn, escala.topo) : 'mapa-neutro'}`;
-        const g = h('svg:g', { class: 'zona-grupo', 'aria-label': dica(zn.nome, dens ? zn : null, zn.detalhe).texto, role: 'img' },
-          zn.celulas.map(cel => h('svg:path', { d: cel.d, class: classe, 'data-i': i })));
-        marcas.set(g, { ids: new Set([zn.id]), d: dZona });
-        grupo.append(g);
-      }
-      if (geo.f) grupo.append(h('svg:path', { d: geo.f, class: 'mapa-fronteira', 'aria-hidden': 'true' }));
-    } else {
-      for (const cel of celulas) {
-        const i = alvos.length;
-        const nome = cel.ls.map(l => titulo(l.nome)).join(' · ');
-        const detalhe = [...new Set(cel.ls.map(l => l.bairro).filter(Boolean))].map(b => `Bairro ${titulo(b)}`).join(' · ');
-        const { texto } = dica(nome, dens ? cel : null, detalhe);
-        alvos.push({ d: cel.d, conteudo: () => dica(nome, dens ? cel : null, detalhe).el, escolher: () => escolherLocal(cel.ls[0]) });
-        const p = h('svg:path', { d: cel.d, class: `mapa-celula ${dens ? classeDensidade(cel, escala.topo) : 'mapa-neutro'}`, 'aria-label': texto, 'data-i': i });
-        marcas.set(p, { ids: new Set(cel.ls.map(l => l.id)), d: cel.d });
+        const p = h('svg:path', { d: dZona, class: `mapa-celula mapa-zona ${dens ? classeDensidade(zn, escala.topo) : 'mapa-neutro'}` });
+        apagaveis.set(p, zn.id);
         grupo.append(p);
       }
+      if (geo.f) grupo.append(h('svg:path', { d: geo.f, class: 'mapa-fronteira' }));
+    } else {
+      const porCor = new Map();
+      celulas.forEach((cel, k) => {
+        alvoDaCelula[k] = k;
+        const nome = cel.ls.map(l => titulo(l.nome)).join(' · ');
+        const detalhe = [...new Set(cel.ls.map(l => l.bairro).filter(Boolean))].map(b => `Bairro ${titulo(b)}`).join(' · ');
+        alvos.push({ d: cel.d, conteudo: () => dica(nome, dens ? cel : null, detalhe).el, escolher: () => escolherLocal(cel.ls[0]) });
+        for (const l of cel.ls) dePorId.set(l.id, cel.d);
+        const classe = dens ? classeDensidade(cel, escala.topo) : 'mapa-neutro';
+        (porCor.get(classe) || porCor.set(classe, []).get(classe)).push(cel.d);
+      });
+      for (const [classe, ds] of porCor) grupo.append(h('svg:path', { d: ds.join(''), class: `mapa-celula mapa-classe ${classe}` }));
+      grupo.append(h('svg:path', { d: celulas.map(cel => cel.d).join(''), class: 'mapa-malha' }));
     }
-    const camadas = h('svg:g', { class: 'mapa-camadas', 'clip-path': `url(#${corte})` });
-    svg.append(grupo, camadas, h('svg:path', { d: mun.d, class: 'mapa-contorno-borda', 'aria-hidden': 'true' }));
+    const contorno = h('svg:path', { d: mun.d, class: 'mapa-contorno-borda' });
+    svg.append(grupo, contorno);
     if (porZona) {
       // Número de cada zona no centro dos seus locais de votação desenhados.
       const rotulos = h('svg:g', { class: 'mapa-rotulos mapa-rotulos-zona', 'aria-hidden': 'true' });
@@ -384,8 +405,23 @@ export function criarPaginaMapa(raiz) {
       }
       svg.append(rotulos);
     }
-    interagir(svg, alvos, camadas);
-    return Object.assign(svg, extras);
+    const { el, camadas } = pilha(viewBox, svg, `mapa-pilha-municipio ${porZona ? 'modo-zonas' : 'modo-locais'}`, corte, mun.d);
+    // Ponto do mouse -> coordenadas do mapa -> local de votação mais próximo (= área que o contém).
+    const xs = Float64Array.from(celulas, cel => cel.x), ys = Float64Array.from(celulas, cel => cel.y);
+    interagir(svg, camadas, alvos, e => {
+      if (e.clientX === undefined) return -1;
+      const m = svg.getScreenCTM();
+      if (!m) return -1;
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+      if (contorno.isPointInFill && !contorno.isPointInFill(p)) return -1;
+      let melhor = -1, dmin = Infinity;
+      for (let k = 0; k < xs.length; k++) {
+        const dx = xs[k] - p.x, dy = ys[k] - p.y, d2 = dx * dx + dy * dy;
+        if (d2 < dmin) { dmin = d2; melhor = k; }
+      }
+      return melhor < 0 ? -1 : alvoDaCelula[melhor];
+    });
+    return Object.assign(el, extras);
   }
 
   // Detalhe no painel ao clicar: bairros da zona (modo zonas) ou dados do local (modo locais).

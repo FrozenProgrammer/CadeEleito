@@ -328,7 +328,7 @@ await caso('Mapa do Brasil (Presidente): 27 estados por teclado, legenda, e o ca
 await caso('Zoom no município (zonas): áreas das zonas com números, clique mostra os bairros da zona', async () => {
   const [id] = candSp;
   await abrir(`#/mapa?cand=${id}&uf=SP&mun=${capitalSp.cd}`);
-  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-celula").length > 500 && document.querySelector("#pagina-mapa .legenda-densidade")', 20000), 'áreas do município não apareceram');
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-zona").length > 40 && document.querySelector("#pagina-mapa .legenda-densidade")', 20000), 'áreas do município não apareceram');
   verificar(await avaliar('return !document.querySelector("#pagina-mapa .mapa-ponto, #pagina-mapa circle")'), 'não deveria haver pontos (bolinhas) no mapa');
   verificar(await avaliar('return !!document.querySelector("#pagina-mapa .modo-zonas .mapa-fronteira") && document.querySelectorAll("#pagina-mapa .mapa-rotulos-zona text").length > 20'), 'fronteiras/números das zonas ausentes');
   verificar(await avaliar('return /zona eleitoral/.test(document.querySelector("#pagina-mapa .legenda-titulo").textContent)'), 'legenda deveria ser por zona eleitoral');
@@ -337,21 +337,26 @@ await caso('Zoom no município (zonas): áreas das zonas com números, clique mo
   const voltar = await avaliar('const b = document.querySelector("#pagina-mapa .cartao-topo .botao-secundario"); return b.hidden ? "" : b.textContent');
   verificar(/São Paulo/.test(voltar), `botão de voltar deveria levar ao estado: "${voltar}"`);
   // Tooltip: percentual em negrito.
-  await avaliar('const p = document.querySelector("#pagina-mapa .mapa-celula[class*=dens-]"); const r = p.getBoundingClientRect(); p.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return 1');
+  // Desempenho: uma área por zona (não milhares de caminhos) e o destaque numa camada separada.
+  verificar(await avaliar('return document.querySelectorAll("#pagina-mapa .mapa-pilha-municipio .mapa-svg path").length < 200 && !!document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-topo .mapa-hover")'), 'mapa do município deveria ter poucas formas e camada de destaque separada');
+  await avaliar('return (() => { const svg = document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-svg"); const ref = document.querySelector("#pagina-mapa .mapa-rotulos-zona text"); const r = ref.getBoundingClientRect(); svg.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return 1; })()');
   verificar(await aguardar('document.querySelector(".tooltip:not([hidden]) .tt-pct")'), 'tooltip sem o percentual em destaque');
   verificar(await avaliar('return Number(getComputedStyle(document.querySelector(".tooltip .tt-pct")).fontWeight) >= 700'), 'percentual do tooltip não está em negrito');
   // Clique numa zona: filtro da zona, outras zonas apagadas e tabela de bairros no painel.
-  await avaliar('document.querySelector("#pagina-mapa .mapa-celula[class*=dens-]").dispatchEvent(new MouseEvent("click", { bubbles: true })); return 1');
+  await avaliar('return (() => { const svg = document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-svg"); const ref = document.querySelector("#pagina-mapa .mapa-rotulos-zona text"); const r = ref.getBoundingClientRect(); svg.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return 1; })()');
   verificar(await aguardar('/zona=\\d+/.test(location.hash) && !/local=/.test(location.hash)'), 'clique na zona não aplicou o filtro da zona');
-  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .zona-grupo.apagada").length > 10'), 'outras zonas deveriam ficar apagadas');
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-zona.apagada").length > 10'), 'outras zonas deveriam ficar apagadas');
   verificar(await aguardar('document.querySelectorAll("#pagina-mapa .painel-bairros tbody tr").length > 0', 8000), 'tabela de bairros da zona não apareceu');
   const titulo = await avaliar('return document.querySelector("#pagina-mapa .painel-bairros h4").textContent');
   verificar(/Bairros da Zona \d+/.test(titulo), `título da tabela de bairros: ${titulo}`);
   await foto('04-mapa-municipio-zonas');
   // Modo locais de votação: áreas por local, clique escolhe o local e mostra bairro e seções.
+  // Guarda um ponto dentro da cidade (posição do número de uma zona) para clicar no modo locais.
+  await avaliar('const r = document.querySelector("#pagina-mapa .mapa-rotulos-zona text").getBoundingClientRect(); window.__ponto = [r.x + r.width / 2, r.y + r.height / 2]; return 1');
   await avaliar('[...document.querySelectorAll("#pagina-mapa .modo-mapa .segmento")].find(b => /Locais/.test(b.textContent)).click(); return 1');
   verificar(await aguardar('document.querySelector("#pagina-mapa .modo-locais") && !document.querySelector("#pagina-mapa .mapa-fronteira")', 10000), 'modo locais não desenhou');
-  await avaliar('document.querySelector("#pagina-mapa .mapa-celula[class*=dens-]").dispatchEvent(new MouseEvent("click", { bubbles: true })); return 1');
+  await espera(700); // fim da animação de entrada (o mapa cresce de 60% a 100%)
+  await avaliar('return (() => { const svg = document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-svg"); const ref = null; svg.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: window.__ponto[0], clientY: window.__ponto[1] })); return 1; })()');
   verificar(await aguardar('/local=\\d+/.test(location.hash)'), 'clique na área não aplicou o local');
   verificar(await aguardar('document.querySelector("#pagina-mapa .mapa-selecao[d]") && /Seções/.test(document.querySelector("#pagina-mapa .painel-local")?.textContent || "")'), 'local escolhido sem destaque/detalhes');
   verificar(await avaliar('return document.querySelector("#pagina-mapa .modo-mapa [aria-checked=true]").textContent.includes("Locais")'), 'o modo escolhido deveria continuar após o clique');
@@ -373,7 +378,7 @@ await caso('Desempenho do mapa: hover em camada única, sem filtros nas áreas, 
     for (let k = 0; k < 200; k++) alvo.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: b.x + b.width / 2 + (k % 3), clientY: b.y + b.height / 2 }));
     const ms = performance.now() - t0;
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const hover = svg.querySelector('.mapa-hover');
+    const hover = document.querySelector('#pagina-mapa .mapa-topo .mapa-hover');
     return {
       ms, hoverOk: hover.getAttribute('d') === alvo.getAttribute('d'),
       semFiltro: areas.slice(0, 50).every(a => getComputedStyle(a).filter === 'none' && getComputedStyle(a).transitionDuration === '0s'),
@@ -390,7 +395,7 @@ await caso('Desempenho do mapa: hover em camada única, sem filtros nas áreas, 
 
 await caso('Página inicial: sem botão "Compartilhar", fonte abaixo do mapa e zoom no município', async () => {
   await abrir(`#/resultados?cand=${govAc[0]}&uf=AC&mun=${ac.cd}`);
-  verificar(await aguardar('document.querySelector(".cartao-social") && document.querySelectorAll("#pagina-resultados .mapa-celula").length > 10', 15000), 'cartão/mapa do município não apareceram');
+  verificar(await aguardar('document.querySelector(".cartao-social") && document.querySelector("#pagina-resultados .mapa-pilha-municipio .mapa-celula")', 15000), 'cartão/mapa do município não apareceram');
   verificar(await avaliar('return ![...document.querySelectorAll(".compartilhar button, .compartilhar a")].some(b => b.textContent.trim() === "Compartilhar")'), 'botão "Compartilhar" ainda aparece');
   verificar(await aguardar('document.querySelector("#pagina-resultados .resultados-fonte .fonte")'), 'fonte dos dados ausente');
   verificar(await avaliar('const m = document.querySelector("#pagina-resultados .resultados-mapa"), f = document.querySelector("#pagina-resultados .resultados-fonte"); return m.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING && f.getBoundingClientRect().top >= m.getBoundingClientRect().bottom - 1'), 'a fonte deveria ficar abaixo do mapa');

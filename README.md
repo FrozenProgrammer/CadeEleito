@@ -189,7 +189,7 @@ legado/v2.9/            Versão anterior do projeto, mantida só para referênci
 | Bairros, locais de votação e eleitorado | TSE, dados abertos: `.../eleitorado_locais_votacao/eleitorado_local_votacao_2026.zip` |
 | Fotos dos candidatos | TSE, dados abertos: `cdn.tse.jus.br/estatistica/sead/eleicoes/eleicoes2026/fotos/foto_cand2026_{UF|BR}_div.zip` |
 | Busca de candidatos | TSE, dados abertos: `.../consulta_cand/consulta_cand_2026.zip` (só nome, número, partido, cargo, UF e situação) |
-| Contornos do mapa | IBGE, API de malhas |
+| Contornos do mapa | IBGE, API de malhas. Uma cópia já convertida fica em `dados-fixos/malhas/` (≈ 0,7 MB) e é a usada na geração: a API do IBGE costuma não responder a servidores fora do Brasil, como os do GitHub Actions. Para atualizar a cópia a partir do IBGE (num computador no Brasil): `BR_ELEICOES_ATUALIZAR_MALHAS=1 npm run gerar -- AC` e faça commit de `dados-fixos/malhas/`. |
 
 ## Segurança
 

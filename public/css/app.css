@@ -432,6 +432,12 @@ section.cartao { padding: 18px 20px; }
 .mapa-cartao h2 { font-size: 1.35rem; }
 .mapa-area { min-height: 320px; display: grid; place-items: center; }
 .mapa-svg { width: 100%; height: auto; max-height: 640px; display: block; }
+/* Pilha: o mapa colorido numa camada própria (pintada uma vez) e o destaque num SVG por cima,
+   do mesmo tamanho e viewBox. Passar o mouse só repinta a camada de cima. */
+.mapa-pilha { position: relative; width: 100%; }
+.mapa-pilha > .mapa-svg { will-change: transform; }
+.mapa-topo { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.mapa-pilha-municipio > .mapa-svg { cursor: pointer; }
 /* Desempenho: as áreas não têm hover, filtro nem transição próprios (são centenas ou milhares).
    O destaque é uma camada única por cima (.mapa-hover) e a seleção outra (.mapa-selecao). */
 .mapa-regiao { stroke: var(--superficie); stroke-width: .7; vector-effect: non-scaling-stroke; cursor: pointer; }
@@ -453,21 +459,10 @@ section.cartao { padding: 18px 20px; }
 /* Mapa do município: áreas dos locais de votação (recortadas pelo contorno), fronteiras e números
    das zonas. No modo zonas o contorno de cada área tem a cor da própria área (some a costura). */
 .mapa-municipio { max-height: 640px; }
-.mapa-celula { stroke: var(--superficie); stroke-width: .6; vector-effect: non-scaling-stroke; cursor: pointer; }
-.modo-zonas .mapa-celula { stroke-width: .9; }
-.modo-zonas .mapa-celula.dens-0 { stroke: var(--s-sem); }
-.modo-zonas .mapa-celula.cor-sem { stroke: var(--s-nd); }
-.modo-zonas .mapa-celula.dens-1 { stroke: var(--d1); }
-.modo-zonas .mapa-celula.dens-2 { stroke: var(--d2); }
-.modo-zonas .mapa-celula.dens-3 { stroke: var(--d3); }
-.modo-zonas .mapa-celula.dens-4 { stroke: var(--d4); }
-.modo-zonas .mapa-celula.dens-5 { stroke: var(--d5); }
-.modo-zonas .mapa-celula.dens-6 { stroke: var(--d6); }
-.modo-zonas .mapa-celula.dens-7 { stroke: var(--d7); }
-.modo-zonas .mapa-celula.dens-8 { stroke: var(--d8); }
-.modo-zonas .mapa-celula.dens-9 { stroke: var(--d9); }
-.zona-grupo { transition: opacity .2s; }
-.zona-grupo.apagada { opacity: .35; }
+/* Áreas agrupadas: um caminho por zona ou por cor (sem contorno: não há costura entre áreas). */
+.mapa-celula { stroke: none; }
+.mapa-malha { fill: none; stroke: var(--superficie); stroke-width: .5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.mapa-zona.apagada { opacity: .35; }
 .mapa-fronteira { fill: none; stroke: var(--texto); stroke-width: 1.4; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; opacity: .85; }
 .mapa-contorno-borda { fill: none; stroke: var(--texto); stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
 .mapa-rotulos.mapa-rotulos-zona text { font-size: var(--fs, 15px); stroke-width: calc(var(--fs, 15px) * .22); }
@@ -610,8 +605,8 @@ button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-list
 
 /* Mapa: uma única animação no <svg> inteiro (as cores "pintam" da esquerda para a direita com
    um recorte que se abre), em vez de uma animação por área, que pesava em estados e cidades grandes. */
-.mapa-svg { animation: revelar .7s cubic-bezier(.2, .7, .2, 1) backwards; }
-.mapa-municipio { animation: mapa-zoom .6s cubic-bezier(.2, .8, .2, 1) backwards; transform-origin: center; }
+.mapa-pilha { animation: revelar .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+.mapa-pilha-municipio { animation: mapa-zoom .6s cubic-bezier(.2, .8, .2, 1) backwards; transform-origin: center; }
 @keyframes revelar { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes mapa-zoom { from { opacity: 0; transform: scale(.6); } }
 .mapa-fronteira, .mapa-rotulos-zona { animation: surgir .4s ease-out .5s backwards; }

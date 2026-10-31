@@ -1,0 +1,2 @@
+# Arquivos compactados (malhas do IBGE): nunca converter fim de linha.
+*.gz binary
