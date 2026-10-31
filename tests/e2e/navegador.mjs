@@ -409,11 +409,13 @@ await caso('Zoom pela roda do mouse: aproxima no cursor, abre o município sozin
   const roda = async (deltaY, { x, y }) => cmd('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY });
   const vb0 = await avaliar('return document.querySelector("#pagina-mapa .mapa-svg").getAttribute("viewBox")');
   const alvo = await ponto();
+  // Município que está de fato sob o cursor (o centro da caixa da capital pode cair num vizinho).
+  const nomeAlvo = await avaliar(`return document.elementFromPoint(${alvo.x}, ${alvo.y}).getAttribute('aria-label').split('.')[0]`);
   await roda(-120, alvo); await espera(120);
   verificar(await avaliar(`return document.querySelector("#pagina-mapa .mapa-svg").getAttribute("viewBox") !== ${JSON.stringify(vb0)} && document.querySelector("#pagina-mapa .mapa-pilha").classList.contains("ampliado")`), 'a roda não aproximou o mapa');
   verificar(await avaliar('const t = document.querySelector("#pagina-mapa .mapa-svg"), m = document.querySelector("#pagina-mapa .mapa-topo"); return t.getAttribute("viewBox") === m.getAttribute("viewBox")'), 'as camadas do mapa ficaram com zoom diferente');
   for (let k = 0; k < 40 && !(await avaliar('return location.hash.includes("mun=")')); k++) { await roda(-240, alvo); await espera(60); }
-  verificar(await aguardar(`location.hash.includes("mun=${capitalSp.cd}") && document.querySelector("#pagina-mapa .mapa-pilha-municipio")`, 15000), 'aproximar não abriu o município sob o cursor');
+  verificar(await aguardar(`location.hash.includes("mun=") && document.querySelector("#pagina-mapa .mapa-pilha-municipio") && document.querySelector("#pagina-mapa .mapa-cartao h2").textContent === ${JSON.stringify(nomeAlvo)}`, 15000), `aproximar não abriu o município sob o cursor (${nomeAlvo})`);
   await espera(800);
   // Afastar além do mapa inteiro volta ao estado.
   const meio = await avaliar('const b = document.querySelector("#pagina-mapa .mapa-pilha").getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }');

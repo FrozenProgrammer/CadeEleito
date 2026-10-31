@@ -291,9 +291,13 @@ export function criarPaginaMapa(raiz) {
     function animarPara(alvo, ms = 280) {
       cancelAnimationFrame(animacao);
       if (semAnimacao()) ms = 0;
-      const de = { ...vb }, t0 = performance.now();
+      const de = { ...vb };
+      let t0 = null;
       const passo = t => {
-        const p = ms ? Math.min(1, (t - t0) / ms) : 1, e = 1 - (1 - p) ** 3;
+        // O tempo conta do 1º quadro: o horário do quadro pode ser anterior a quando a animação foi
+        // pedida (depois de desenhar um mapa grande), o que daria progresso negativo.
+        t0 ??= t;
+        const p = ms ? Math.min(1, Math.max(0, (t - t0) / ms)) : 1, e = 1 - (1 - p) ** 3;
         for (const k of ['x', 'y', 'w', 'h']) vb[k] = de[k] + (alvo[k] - de[k]) * e;
         aplicar();
         if (p < 1) animacao = requestAnimationFrame(passo);

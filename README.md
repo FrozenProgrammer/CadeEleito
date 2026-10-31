@@ -3,7 +3,7 @@
 Site para consultar os resultados oficiais das **Eleições Gerais de 2026** (1º turno em 4/10 e 2º turno em 25/10) com dados reais do **Tribunal Superior Eleitoral (TSE)**.
 
 - **Resultados** (página inicial): tudo começa pela busca do candidato (nome ou número); o cargo vem dele. Depois de escolhido, aparecem o turno e o filtro **Estado › Município › Zona › Bairro › Local de votação › Seção**. A busca mostra a **foto oficial** de cada candidato ao lado do número. Abaixo, um **cartão do candidato** com a foto, os votos, o % dos válidos e a posição no local pesquisado, pronto para compartilhar: X, WhatsApp, Facebook, copiar link e **imagem 1080 × 1080** para o Instagram (gerada no navegador). Abaixo do cartão, o mapa de densidade e a fonte dos dados.
-- **Mapa**: densidade de votos do candidato buscado, em três níveis de zoom: **Brasil** (por estado, para Presidente) › **Estado** (por município) › **Município**, dividido em **zonas eleitorais** (com o número de cada zona; clique para ver os bairros da zona) ou em **áreas de locais de votação** (clique para ver bairro, endereço e seções). O TSE não publica limites de zonas ou seções: cada ponto do município é atribuído ao local de votação mais próximo (diagrama de Voronoi a partir da latitude/longitude dos locais), e a zona é a união das áreas dos seus locais. Cada área ou local é colorido pelo % dos votos válidos que o candidato teve ali, numa escala de 9 tons: quanto maior o percentual, mais forte a cor. Clicar em um município aproxima o mapa; clicar em uma zona ou local aplica o filtro. O logo no canto superior esquerdo volta ao início com todos os filtros limpos.
+- **Mapa**: densidade de votos do candidato buscado, em três níveis de zoom: **Brasil** (por estado, para Presidente) › **Estado** (por município) › **Município**, dividido em **zonas eleitorais** (com o número de cada zona; clique para ver os bairros da zona) ou em **áreas de locais de votação** (clique para ver bairro, endereço e seções). O TSE não publica limites de zonas ou seções: cada ponto do município é atribuído ao local de votação mais próximo (diagrama de Voronoi a partir da latitude/longitude dos locais), e a zona é a união das áreas dos seus locais. Cada área ou local é colorido pelo % dos votos válidos que o candidato teve ali, numa escala de 9 tons: quanto maior o percentual, mais forte a cor. Clicar em um município aproxima o mapa; clicar em uma zona ou local aplica o filtro. **Zoom** pela roda do mouse (no ponto do cursor), pinça no celular ou botões + / −, e arrastar para mover; ao aproximar bastante de um estado ou município ele abre sozinho, e afastar além do mapa inteiro volta ao nível de cima. O logo no canto superior esquerdo volta ao início com todos os filtros limpos.
 - **Sobre**: de onde vêm os dados e como ler os números.
 
 ## Como funciona
@@ -151,7 +151,8 @@ public/                 Código do site (copiado para dist/ na geração)
   js/api.js             Camada de dados: lê dist/dados/ e calcula cada recorte
   js/calculo.js         Regras de soma (usadas também pelo gerador e pelo verificador)
   js/filtros.js         Barra de filtros e busca de candidatos
-  js/grafico.js         Gráfico de barras (painel do mapa) e tooltip
+  js/grafico.js         Tooltip do mapa
+  fonts/                Newsreader (títulos) e Inter (texto), licença OFL, servidas pelo próprio site
   js/paginas/           Páginas Resultados e Mapa
   _headers, .htaccess   Cabeçalhos de segurança para Netlify/Cloudflare e Apache
 lib/                    Usado só na geração: acesso ao TSE/IBGE, leitura de ZIP/CSV e índices
