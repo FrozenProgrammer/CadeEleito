@@ -26,6 +26,6 @@
 /img/*
   Cache-Control: public, max-age=604800
 
-# Fontes (Newsreader e Inter, licença OFL): mudam raramente.
+# Fontes (Newsreader e Inter, licença OFL; outras da página Typography em fonts/tipografia): mudam raramente.
 /fonts/*
   Cache-Control: public, max-age=2592000

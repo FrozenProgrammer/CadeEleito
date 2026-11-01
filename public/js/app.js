@@ -14,8 +14,9 @@ import { estado, contexto, aoMudar, iniciarEstado, urlPara, definir } from './es
 import { criarFiltros, normalizarEstado } from './filtros.js';
 import { criarPaginaResultados } from './paginas/resultados.js';
 import { criarPaginaMapa } from './paginas/mapa.js';
+import { criarPaginaTipografia } from './paginas/tipografia.js';
 
-const TITULOS = { resultados: 'Resultados', mapa: 'Mapa', sobre: 'Sobre os dados' };
+const TITULOS = { resultados: 'Resultados', mapa: 'Mapa', sobre: 'Sobre os dados', tipografia: 'Typography' };
 const paginas = {};
 
 function atualizarNavegacao() {
@@ -25,7 +26,7 @@ function atualizarNavegacao() {
     if (ativa) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
   for (const s of document.querySelectorAll('.pagina')) s.hidden = s.id !== `pagina-${estado.pagina}`;
-  $('#filtros').hidden = estado.pagina === 'sobre';
+  $('#filtros').hidden = estado.pagina === 'sobre' || estado.pagina === 'tipografia';
   // Cada página tem a sua cor de destaque (ver css/app.css, "temas por página").
   document.body.dataset.pagina = estado.pagina;
   document.title = `${TITULOS[estado.pagina]} · Cadê o eleito? · Eleições 2026`;
@@ -56,7 +57,9 @@ async function iniciar() {
   await restaurarCandidato();
   const filtros = criarFiltros($('#filtros'));
   paginas.resultados = criarPaginaResultados($('#pagina-resultados'));
-  paginas.mapa = criarPaginaMapa($('#pagina-mapa'));
+  // Aba Mapa: clicar num município só o seleciona (o mapa por zona/local fica na página inicial).
+  paginas.mapa = criarPaginaMapa($('#pagina-mapa'), { abrirCidade: false });
+  paginas.tipografia = criarPaginaTipografia($('#pagina-tipografia'));
   await filtros.iniciar();
   // Logo do topo: página inicial sem nenhum filtro (o endereço sem parâmetros zera tudo).
   $('#inicio').addEventListener('click', e => {

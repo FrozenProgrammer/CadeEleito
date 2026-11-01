@@ -20,8 +20,9 @@
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/tipografia.css">
   <!-- Fontes do próprio site (licença OFL): Newsreader nos títulos, Inter no texto. -->
-  <link rel="preload" href="fonts/newsreader-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <!-- Aplica o tema salvo (claro/escuro) antes de desenhar a página, sem piscar. -->
   <script src="js/tema.js"></script>
@@ -36,6 +37,7 @@
   <link rel="modulepreload" href="js/paginas/comum.js">
   <link rel="modulepreload" href="js/paginas/resultados.js">
   <link rel="modulepreload" href="js/paginas/mapa.js">
+  <link rel="modulepreload" href="js/paginas/tipografia.js">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
@@ -56,6 +58,7 @@
         <a data-pagina="resultados" href="#/resultados">Resultados</a>
         <a data-pagina="mapa" href="#/mapa">Mapa</a>
         <a data-pagina="sobre" href="#/sobre">Sobre</a>
+        <a data-pagina="tipografia" href="#/tipografia">Typography</a>
       </nav>
       <button type="button" id="tema-botao" class="tema-botao" aria-label="Ativar tema claro" title="Ativar tema claro">
         <svg class="icone icone-lua" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
@@ -65,6 +68,63 @@
   </header>
 
   <div class="heroi">
+    <!-- Ilustração da página inicial: cartões-postais do Brasil em traço à mão (linhas que se
+         desenham ao abrir). Decorativa: escondida dos leitores de tela. Cada <g> é um lugar; os
+         translate() deixam o mesmo espaço visível (~46) entre um lugar e outro, medido na altura
+         em que a caixa de busca começa a cobrir o pé da ilustração (y ≈ 180): Rio (Pão de Açúcar e
+         Cristo) até 428, Pampulha 474–629, Congresso 675–823, Catedral 869–923, Teatro 969–1074,
+         coqueiro 1120–1196. -->
+    <svg class="heroi-arte" viewBox="0 0 1200 220" aria-hidden="true" focusable="false">
+      <g><!-- Pão de Açúcar e Urca, com o bondinho -->
+        <path class="traco" pathLength="1" d="M10 200C30 150 55 119 82 116C108 114 122 150 140 200"/>
+        <path class="traco" pathLength="1" d="M128 200C139 151 151 71 190 58C229 47 251 111 262 200"/>
+        <path class="traco" pathLength="1" d="M82 116L190 58"/>
+        <g class="bondinho"><path class="traco" pathLength="1" d="M93 110.5v5M87.5 115.5h11v8.5h-11zM87.5 119.5h11"/></g>
+        <path class="traco" pathLength="1" d="M0 207q15-5 30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0"/>
+      </g>
+      <g><!-- Cristo Redentor no Corcovado -->
+        <path class="traco" pathLength="1" d="M262 200C291 159 318 109 345 93C359 85 372 88 381 101C398 131 421 170 440 200"/>
+        <path class="traco" pathLength="1" d="M352.5 89.5L354 84H366L367.5 89.5"/>
+        <path class="traco" pathLength="1" d="M355.5 84C354.2 76 353.6 69 354.6 62.5C346 61.8 338 60.8 331.5 59.6C330.6 58.4 330.6 56.8 331.5 55.8C340 54.6 348.5 54 355.8 53.6H364.2C371.5 54 380 54.6 388.5 55.8C389.4 56.8 389.4 58.4 388.5 59.6C382 60.8 374 61.8 365.4 62.5C366.4 69 365.8 76 364.5 84Z"/>
+        <path class="traco" pathLength="1" d="M360 64.5V82M357.5 57.5C359 59 361 59 362.5 57.5"/>
+        <circle class="traco" pathLength="1" cx="360" cy="49.6" r="3.6"/>
+      </g>
+      <g transform="translate(20 0)"><!-- Igreja da Pampulha: abóbada parabólica, abóbadas menores, marquise e campanário.
+             Alta o bastante para aparecer acima da caixa de busca, que cobre o pé da ilustração. -->
+        <path class="traco" pathLength="1" d="M452 200C456 62 524 62 528 200"/>
+        <path class="traco" pathLength="1" d="M464 200C468 84 512 84 516 200"/>
+        <path class="traco" pathLength="1" d="M528 200C530 118 552 118 554 200M554 200C556 126 576 126 578 200"/>
+        <path class="traco" pathLength="1" d="M578 160L596 151"/>
+        <path class="traco" pathLength="1" d="M600 200L594 104H614L608 200ZM604 104V92M599.5 96.5H608.5"/>
+      </g>
+      <g transform="translate(-49 0)"><!-- Congresso Nacional -->
+        <path class="traco" pathLength="1" d="M700 200L716 178H884L894 200"/>
+        <path class="traco" pathLength="1" d="M784 178V70H796V178M800 178V70H812V178M784 96H812"/>
+        <path class="traco" pathLength="1" d="M724 160C735 183 765 183 776 160Z"/>
+        <path class="traco" pathLength="1" d="M822 178C828 151 866 151 872 178"/>
+      </g>
+      <g transform="translate(-49 0)"><!-- Catedral de Brasília -->
+        <path class="traco" pathLength="1" d="M910 200C935 165 935 135 922 95M925 200C940 165 940 135 935 92M940 200C944 165 944 135 942 90"/>
+        <path class="traco" pathLength="1" d="M980 200C955 165 955 135 968 95M965 200C950 165 950 135 955 92M950 200C946 165 946 135 948 90"/>
+        <path class="traco" pathLength="1" d="M945 89V74M940 79H950"/>
+      </g>
+      <g transform="translate(-36 0)"><!-- Teatro Amazonas -->
+        <path class="traco" pathLength="1" d="M1005 200V158H1110V200"/>
+        <path class="traco" pathLength="1" d="M1040 158L1057 146L1074 158"/>
+        <path class="traco" pathLength="1" d="M1015 200V166M1025 200V166M1090 200V166M1100 200V166"/>
+        <path class="traco" pathLength="1" d="M1036 146C1038 112 1076 112 1078 146M1047 140C1050 121 1064 121 1067 140M1057 117V104"/>
+      </g>
+      <g class="arte-ceu"><!-- passarinhos -->
+        <path class="traco ave" pathLength="1" d="M548 72q6-7 12 0q6-7 12 0"/>
+        <path class="traco ave" pathLength="1" d="M580 56q5-6 10 0q5-6 10 0"/>
+        <path class="traco ave" pathLength="1" d="M1000 60q5-6 10 0q5-6 10 0"/>
+      </g>
+      <g><!-- coqueiro -->
+        <path class="traco" pathLength="1" d="M1150 200C1146 170 1150 140 1160 118"/>
+        <path class="traco" pathLength="1" d="M1160 118C1140 108 1128 114 1120 126M1160 118C1150 100 1136 96 1126 100M1160 118C1170 98 1186 96 1194 104M1160 118C1180 110 1192 118 1196 130M1160 118C1162 104 1160 94 1154 88"/>
+        <path class="traco" pathLength="1" d="M1120 200H1200"/>
+      </g>
+    </svg>
     <div class="heroi-interno">
       <p class="heroi-sobre">Eleições 2026</p>
       <h1 class="titulo-marca">Cadê o eleito?
@@ -87,6 +147,8 @@
 
     <section id="pagina-resultados" class="pagina" aria-label="Resultados"></section>
     <section id="pagina-mapa" class="pagina" aria-label="Mapa" hidden></section>
+
+    <section id="pagina-tipografia" class="pagina" aria-label="Typography" hidden></section>
 
     <section id="pagina-sobre" class="pagina" aria-label="Sobre os dados" hidden>
       <div class="pagina-conteudo sobre">

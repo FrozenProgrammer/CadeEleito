@@ -236,6 +236,39 @@ async function densidade(p) {
   return { areas, max };
 }
 
+// Mapa "quem venceu": ranking de um cargo em cada município da UF, a partir do mesmo arquivo do
+// mapa de densidade (votos de todos os candidatos por município). O ranking fica compacto
+// ([número, votos], do mais votado ao menos votado) e candidato(número) dá nome, partido e foto
+// só para as linhas que forem exibidas (Deputados têm centenas de candidatos por município).
+async function vencedores(p) {
+  const ix = await indice();
+  const turno = Number(p.turno || 1);
+  const cargo = ix.cargos.find(c => c.id === p.cargo);
+  const uf = String(p.uf || '');
+  if (![1, 2].includes(turno) || !cargo || !ix.ufs.some(u => u.sigla === uf)) erro('Consulta de mapa inválida.');
+  if (!ix.detalhadas.includes(uf)) throw new ErroApi('O mapa por município deste estado não está incluído nesta publicação.', 404);
+  const d = await carregar(`mapa/votos/${uf}/${turno}-${cargo.id}.bin`, 'Sem dados de mapa para este cargo e turno.');
+  const lista = (await listaCandidatos()).map(x => x.c).filter(c => c.cargo === cargo.id && c.uf === (cargo.nacional ? 'BR' : uf));
+  const porNumero = new Map(lista.map(c => [String(c.numero), c]));
+  const porArea = new Map(Object.keys(d.validos).map(id => [id, []]));
+  for (const [numero, votosPorArea] of Object.entries(d.votos)) {
+    for (const [id, votos] of Object.entries(votosPorArea)) porArea.get(id)?.push([numero, votos]);
+  }
+  const candidato = numero => {
+    const c = porNumero.get(numero);
+    return { numero, id: c?.id || '', nome: c?.nome || `Número ${numero}`, partido: c?.partido || '', foto: !!c?.foto };
+  };
+  const areas = {};
+  for (const [id, ranking] of porArea) {
+    const validos = d.validos[id];
+    ranking.sort((a, b) => b[1] - a[1]);
+    // top[0] = vencedor (cor do município no mapa).
+    const top = ranking.slice(0, 1).map(([numero, votos]) => ({ ...candidato(numero), votos, percentual: validos ? (votos / validos) * 100 : 0 }));
+    areas[id] = { validos, ranking, top };
+  }
+  return { areas, candidato };
+}
+
 // Mapa do município: votos do candidato em cada local de votação. x, y = posição do local nas
 // coordenadas do mapa da UF (ausentes quando o TSE não informa latitude/longitude).
 async function densidadeLocais(p) {
@@ -292,6 +325,7 @@ const ROTAS = {
   '/api/mapa/brasil': () => carregar('mapa/brasil.bin'),
   '/api/mapa/uf': async p => { await arquivoUf(p.uf); return carregar(`mapa/${p.uf}.bin`); },
   '/api/mapa/candidato': densidade,
+  '/api/mapa/vencedores': vencedores,
   '/api/mapa/locais': densidadeLocais,
 };
 

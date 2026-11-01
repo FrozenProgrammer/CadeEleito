@@ -2,13 +2,14 @@
    Tema escuro em tons de cinza, azul e neutros. Cada página tem a sua cor de destaque
    (ver "temas por página"). Paleta dos gráficos: paleta de referência validada para o
    fundo escuro (CVD e contraste).
-   Tipografia editorial: Newsreader (serifa de jornal) nos títulos, nomes e números de destaque;
-   Inter no texto e nos controles. As duas ficam em public/fonts (licença OFL, sem CDN: a CSP só
-   permite fontes do próprio site). */
+   Tipografia editorial (opção 2 da página Typography): Newsreader, serifa de jornal, nos títulos e
+   nomes (peso 600, sem espaçamento negativo); Inter no texto, nos controles e nos números
+   (tabulares, alinhados). As duas ficam em public/fonts (licença OFL, sem CDN: a CSP só permite
+   fontes do próprio site). As outras opções de comparação estão em css/tipografia.css. */
 
 @font-face {
   font-family: "Newsreader"; font-style: normal; font-weight: 200 800; font-display: swap;
-  src: url("../fonts/newsreader-latin-opsz-normal.woff2") format("woff2");
+  src: url("../fonts/newsreader-latin-wght-normal.woff2") format("woff2");
 }
 @font-face {
   font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
@@ -52,9 +53,14 @@
   --s1: #3987e5;
   --s1-forte: #6da7ec;
   --s-sem: #24282e;
-  /* densidade de votos no mapa: escala sequencial azul (paleta de referência validada); no
-     escuro a cor mais fraca se aproxima do fundo e a mais forte é a mais clara */
-  --d1: #0d366b; --d2: #184f95; --d3: #256abf; --d4: #2a78d6; --d5: #3987e5; --d6: #6da7ec; --d7: #86b6ef; --d8: #9ec5f4; --d9: #cde2fb;
+  /* Densidade de votos no mapa: escala sequencial de UMA cor, a do partido do candidato
+     (--partido, definida pelo mapa; js/partidos.js). Os 9 degraus têm a mesma matiz e
+     luminosidade fixa (oklch): o salto entre degraus é igual para qualquer partido. No escuro a
+     cor mais fraca se aproxima do fundo e a mais forte é a mais clara; no claro, o contrário.
+     --l = luminosidade, --c = fração da saturação do partido em cada degrau. */
+  --partido: #2a78d6;
+  --l1: .36; --l2: .42; --l3: .48; --l4: .55; --l5: .62; --l6: .69; --l7: .76; --l8: .83; --l9: .9;
+  --c1: .75; --c2: .85; --c3: .95; --c4: 1; --c5: 1; --c6: .9; --c7: .75; --c8: .6; --c9: .45;
   --s-nd: #4b515b;   /* sem dados (área sem votação publicada) */
   --grade: #252a31;
   --serifa: "Newsreader", Georgia, "Times New Roman", serif;
@@ -96,7 +102,8 @@
   --s1: #2a78d6;
   --s1-forte: #1c5cab;
   --s-sem: #e8ebef;
-  --d1: #cde2fb; --d2: #9ec5f4; --d3: #86b6ef; --d4: #6da7ec; --d5: #3987e5; --d6: #2a78d6; --d7: #256abf; --d8: #184f95; --d9: #0d366b;
+  --l1: .95; --l2: .88; --l3: .81; --l4: .73; --l5: .65; --l6: .57; --l7: .49; --l8: .41; --l9: .33;
+  --c1: .25; --c2: .4; --c3: .55; --c4: .7; --c5: .85; --c6: 1; --c7: 1; --c8: .95; --c9: .85;
   --s-nd: #b9bfc8;
   --grade: #e6e9ee;
 }
@@ -144,9 +151,9 @@ body {
   display: flex;
   flex-direction: column;
 }
-h1, h2, h3 { margin: 0; font-family: var(--serifa); letter-spacing: -.01em; line-height: 1.15; }
-h2 { font-size: 1.7rem; font-weight: 650; }
-h3 { font-size: 1.15rem; font-weight: 650; }
+h1, h2, h3 { margin: 0; font-family: var(--serifa); font-weight: 600; letter-spacing: 0; line-height: 1.15; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.15rem; }
 p { margin: 0; }
 a { color: var(--azul); }
 code { font-size: .88em; background: var(--superficie-3); padding: .1em .35em; border-radius: 5px; }
@@ -212,13 +219,53 @@ button, input, select { font: inherit; color: inherit; }
 }
 .heroi-sobre::before, .heroi-sobre::after { content: ""; flex: 1; border-top: 1px solid currentColor; opacity: .5; }
 .heroi-interno { text-align: center; }
-.heroi h1 { font-size: clamp(2.6rem, 6.4vw, 4.4rem); font-weight: 700; letter-spacing: -.025em; line-height: 1.02; }
+.heroi h1 { font-size: clamp(2.4rem, 5.6vw, 4rem); line-height: 1.05; }
 /* Título com o logo "lupa no mapa" logo depois do texto; as cores seguem o tema. */
 .titulo-marca { display: inline-flex; align-items: center; gap: .28em; }
 .titulo-logo { width: 1.1em; height: 1.1em; flex: none; }
 .titulo-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
 .titulo-logo .lg-f2 { fill: var(--logo-2); }
 .heroi-lema { margin: 12px auto 0; max-width: 640px; color: var(--texto-2); font-family: var(--serifa); font-size: 1.22rem; line-height: 1.4; }
+/* Página inicial (só a busca): ilustração em traço dos cartões-postais do Brasil atrás da busca,
+   que fica um pouco mais abaixo. As linhas se desenham (stroke-dashoffset, com pathLength="1" em
+   cada traço) e se redesenham a cada 1 minuto (o ciclo da animação tem 60 s: ~2,4 s desenhando e
+   o resto parado); o bondinho sobe e desce o cabo e os passarinhos planam devagar. */
+.heroi { position: relative; overflow: hidden; }
+.heroi-interno { position: relative; z-index: 1; }
+.heroi-arte {
+  display: none; position: absolute; left: 50%; bottom: 0; width: min(1240px, 100%); height: auto;
+  transform: translateX(-50%); pointer-events: none; color: var(--acento-texto); opacity: .42;
+}
+body[data-pagina="resultados"]:has(.filtros-so-busca) .heroi { padding-bottom: 196px; }
+body[data-pagina="resultados"]:has(.filtros-so-busca) .heroi-arte { display: block; }
+/* A caixa de busca fica com o meio exatamente na divisa entre o fundo da ilustração e o da página:
+   começa na divisa (margem 0) e sobe metade da própria altura. */
+body[data-pagina="resultados"]:has(.filtros-so-busca) .principal { margin-top: 0; }
+body[data-pagina="resultados"] .filtros.filtros-so-busca { transform: translateY(-50%); }
+.heroi-arte .traco {
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1; stroke-dashoffset: 0; animation: tracar 60s linear infinite backwards;
+}
+.heroi-arte g:nth-of-type(2) .traco { animation-delay: .25s; }
+.heroi-arte g:nth-of-type(3) .traco { animation-delay: .5s; }
+.heroi-arte g:nth-of-type(4) .traco { animation-delay: .75s; }
+.heroi-arte g:nth-of-type(5) .traco { animation-delay: 1s; }
+.heroi-arte g:nth-of-type(6) .traco { animation-delay: 1.2s; }
+.heroi-arte g:nth-of-type(8) .traco { animation-delay: 1.35s; }
+.heroi-arte .ave { animation: tracar 60s linear 1.6s infinite backwards, planar 7s ease-in-out 2.8s infinite; }
+@keyframes tracar {
+  0% { stroke-dashoffset: 1; animation-timing-function: cubic-bezier(.45, .05, .3, 1); }
+  4%, 100% { stroke-dashoffset: 0; }
+}
+/* Bondinho: do pé do Morro da Urca ao Pão de Açúcar pelo cabo (M82 116 L190 58) e de volta. */
+.heroi-arte .bondinho { animation: bondinho 16s ease-in-out 2.6s infinite; }
+@keyframes bondinho {
+  0%, 8% { transform: translate(0, 0); }
+  46%, 54% { transform: translate(86px, -46.4px); }
+  92%, 100% { transform: translate(0, 0); }
+}
+@keyframes planar { 50% { transform: translate(14px, -6px); } }
+
 /* Sobre: só o título no cabeçalho. */
 body[data-pagina="sobre"] .heroi-lema { display: none; }
 
@@ -360,26 +407,26 @@ h3 .selo-eleito { vertical-align: middle; margin-left: 10px; }
   border: 1px solid var(--borda-forte); border-top: 4px solid var(--acento-texto); box-shadow: var(--sombra-2);
 }
 .social-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--borda-forte); }
-.social-marca { display: inline-flex; align-items: center; gap: 8px; font-family: var(--serifa); font-weight: 700; font-size: 1.2rem; letter-spacing: -.01em; }
+.social-marca { display: inline-flex; align-items: center; gap: 8px; font-family: var(--serifa); font-weight: 600; font-size: 1.25rem; }
 .social-logo { width: 28px; height: 28px; flex: none; }
 .social-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
 .social-logo .lg-f2 { fill: var(--logo-2); }
 .social-eleicao { font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--acento-texto); }
 .social-cand { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center; }
-.destaque-num { font-size: 1.6rem; font-weight: 800; background: var(--vidro-forte); border-radius: var(--raio-p); padding: 12px 16px; font-variant-numeric: tabular-nums; }
+.destaque-num { font-size: 1.6rem; font-weight: 700; background: var(--vidro-forte); border-radius: var(--raio-p); padding: 12px 16px; font-variant-numeric: tabular-nums; }
 .destaque-sobre { font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-2); font-weight: 650; }
-.social-nome h3 { font-size: clamp(1.7rem, 4.2vw, 2.5rem); font-weight: 700; line-height: 1.05; letter-spacing: -.02em; margin: 4px 0; overflow-wrap: anywhere; }
+.social-nome h3 { font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.05; margin: 4px 0; overflow-wrap: anywhere; }
 .social-nome p { color: var(--texto-2); font-size: .9rem; }
 .social-local { display: flex; gap: 10px; align-items: flex-start; border-left: 3px solid var(--acento-texto); padding: 4px 0 4px 14px; }
 .social-local > .icone { color: var(--acento-texto); margin-top: 2px; flex: none; }
 .social-local > div { display: grid; gap: 2px; min-width: 0; }
 .social-rotulo { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-2); }
-.social-local strong { font-family: var(--serifa); font-size: 1.2rem; font-weight: 650; overflow-wrap: anywhere; }
+.social-local strong { font-family: var(--serifa); font-size: 1.2rem; font-weight: 600; overflow-wrap: anywhere; }
 .social-local small { color: var(--texto-2); font-size: .82rem; }
 /* Números em destaque como num infográfico de jornal: fio em cima, número grande, legenda curta. */
 .social-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 22px; }
 .social-metrica { border-top: 2px solid var(--texto); padding: 10px 0 2px; display: grid; gap: 2px; align-content: start; }
-.social-metrica strong { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.social-metrica strong { font-size: 1.8rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .social-metrica span { font-size: .78rem; color: var(--texto-2); }
 .social-fonte { font-size: .74rem; color: var(--texto-2); padding-top: 10px; border-top: 1px solid var(--borda-forte); }
 .compartilhar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; width: 100%; max-width: 760px; margin-inline: auto; }
@@ -392,7 +439,7 @@ h3 .selo-eleito { vertical-align: middle; margin-left: 10px; }
 section.cartao { padding: 18px 20px; }
 .tabela-rolagem { overflow-x: auto; margin: 0 -6px; }
 .tabela-alta { max-height: 380px; overflow-y: auto; }
-.tabela { width: 100%; border-collapse: collapse; font-size: .93rem; }
+.tabela { width: 100%; border-collapse: collapse; font-size: .93rem; font-variant-numeric: tabular-nums; }
 .tabela th {
   text-align: left; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--texto-3); font-weight: 650;
   padding: 8px 10px; border-bottom: 2px solid var(--texto); position: sticky; top: 0; background: var(--superficie);
@@ -431,7 +478,7 @@ section.cartao { padding: 18px 20px; }
 
 
 .tabela-dados summary { cursor: pointer; color: var(--azul); font-weight: 600; font-size: .86rem; width: fit-content; padding: 2px 0; }
-.tabela-dados table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .88rem; }
+.tabela-dados table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .88rem; font-variant-numeric: tabular-nums; }
 .tabela-dados th, .tabela-dados td { padding: 6px 8px; border-bottom: 1px solid var(--borda); text-align: left; }
 .tabela-dados th { border-bottom: 2px solid var(--texto); color: var(--texto-3); font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; }
 .tabela-dados .num { text-align: right; }
@@ -441,7 +488,7 @@ section.cartao { padding: 18px 20px; }
 .tooltip {
   position: fixed; left: 0; top: 0; will-change: transform; z-index: 60; pointer-events: none; display: grid; gap: 2px;
   background: var(--superficie); color: var(--texto); border: 1px solid var(--borda-forte);
-  border-radius: 10px; padding: 9px 12px; font-size: .82rem; max-width: 320px;
+  border-radius: 10px; padding: 9px 12px; font-size: .82rem; max-width: 320px; font-variant-numeric: tabular-nums;
   box-shadow: var(--sombra-2);
 }
 .tooltip strong { font-size: .88rem; }
@@ -456,8 +503,36 @@ section.cartao { padding: 18px 20px; }
 
 .mapa-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 18px; align-items: start; }
 .mapa-layout.sem-painel { grid-template-columns: minmax(0, 1fr); }
+/* Mapa "quem venceu": atalhos de cargo e os 3 mais votados do município. */
+.chips-cargo { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-cargo {
+  border: 1px solid var(--borda-forte); background: transparent; color: var(--texto-2); border-radius: 999px;
+  padding: 6px 12px; font-size: .84rem; font-weight: 600; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.chip-cargo:hover { color: var(--texto); border-color: var(--texto-3); }
+.chip-cargo[aria-checked="true"] { background: var(--texto); border-color: var(--texto); color: var(--superficie); }
+.painel-ranking { display: grid; gap: 6px; }
+/* Até ~10 linhas visíveis; "Ver mais" acrescenta linhas dentro desta caixa, que rola. */
+.ranking-rolagem { max-height: 560px; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }
+.tabela-ranking td { vertical-align: middle; }
+.ranking-pos { color: var(--texto-3); font-weight: 700; width: 2.6em; }
+.ranking-cand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ranking-foto { width: 32px; height: 42px; border-radius: 6px; flex: none; object-fit: cover; object-position: center 20%; background: var(--superficie-3); font-size: .72rem; }
+.ranking-texto { display: grid; gap: 1px; min-width: 0; }
+.ranking-texto small { color: var(--texto-3); font-size: .76rem; display: flex; align-items: center; gap: 5px; }
+.ranking-nome { background: none; border: 0; padding: 0; text-align: left; color: var(--texto); font-weight: 650; cursor: pointer; text-decoration: underline; text-decoration-color: var(--borda-forte); text-underline-offset: 3px; }
+.ranking-nome:hover { text-decoration-color: currentColor; }
+.ranking-mais {
+  justify-self: center; margin-top: 4px; padding: 6px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--acento-texto) 45%, transparent); background: var(--acento-fundo);
+  color: var(--acento-texto); font-weight: 700; font-size: .84rem;
+}
+.ranking-mais:hover { border-color: var(--acento-texto); }
+.legenda-partidos { gap: 6px 14px; }
+.legenda-partidos li { font-size: .8rem; color: var(--texto-2); }
+.tt-dens .cor-partido { margin-right: 2px; }
 .recorte-sub:empty { display: none; }
-.mapa-cartao h2 { font-size: 1.6rem; }
+.mapa-cartao h2 { font-size: 1.55rem; }
 .mapa-area { min-height: 320px; display: grid; place-items: center; }
 .mapa-svg { width: 100%; height: auto; max-height: 640px; display: block; }
 /* Pilha: o mapa colorido numa camada própria (pintada uma vez) e o destaque num SVG por cima,
@@ -491,15 +566,31 @@ section.cartao { padding: 18px 20px; }
 .mapa-selecao { fill: none; stroke: var(--texto); stroke-width: 2.6; vector-effect: non-scaling-stroke; pointer-events: none; }
 .mapa-neutro, .dens-0 { fill: var(--s-sem); background: var(--s-sem); }
 .cor-sem { fill: var(--s-nd); background: var(--s-nd); }
-.dens-1 { fill: var(--d1); background: var(--d1); }
-.dens-2 { fill: var(--d2); background: var(--d2); }
-.dens-3 { fill: var(--d3); background: var(--d3); }
-.dens-4 { fill: var(--d4); background: var(--d4); }
-.dens-5 { fill: var(--d5); background: var(--d5); }
-.dens-6 { fill: var(--d6); background: var(--d6); }
-.dens-7 { fill: var(--d7); background: var(--d7); }
-.dens-8 { fill: var(--d8); background: var(--d8); }
-.dens-9 { fill: var(--d9); background: var(--d9); }
+/* Degraus calculados no próprio elemento: --partido pode vir do mapa (candidato) ou de cada
+   município (mapa "quem venceu"). Navegadores sem oklch relativo: mistura com a superfície. */
+.dens-1 { --cor: color-mix(in oklab, var(--partido) 18%, var(--superficie)); }
+.dens-2 { --cor: color-mix(in oklab, var(--partido) 28%, var(--superficie)); }
+.dens-3 { --cor: color-mix(in oklab, var(--partido) 38%, var(--superficie)); }
+.dens-4 { --cor: color-mix(in oklab, var(--partido) 48%, var(--superficie)); }
+.dens-5 { --cor: color-mix(in oklab, var(--partido) 58%, var(--superficie)); }
+.dens-6 { --cor: color-mix(in oklab, var(--partido) 68%, var(--superficie)); }
+.dens-7 { --cor: color-mix(in oklab, var(--partido) 78%, var(--superficie)); }
+.dens-8 { --cor: color-mix(in oklab, var(--partido) 88%, var(--superficie)); }
+.dens-9 { --cor: var(--partido); }
+@supports (color: oklch(from red l c h)) {
+  .dens-1 { --cor: oklch(from var(--partido) var(--l1) calc(c * var(--c1)) h); }
+  .dens-2 { --cor: oklch(from var(--partido) var(--l2) calc(c * var(--c2)) h); }
+  .dens-3 { --cor: oklch(from var(--partido) var(--l3) calc(c * var(--c3)) h); }
+  .dens-4 { --cor: oklch(from var(--partido) var(--l4) calc(c * var(--c4)) h); }
+  .dens-5 { --cor: oklch(from var(--partido) var(--l5) calc(c * var(--c5)) h); }
+  .dens-6 { --cor: oklch(from var(--partido) var(--l6) calc(c * var(--c6)) h); }
+  .dens-7 { --cor: oklch(from var(--partido) var(--l7) calc(c * var(--c7)) h); }
+  .dens-8 { --cor: oklch(from var(--partido) var(--l8) calc(c * var(--c8)) h); }
+  .dens-9 { --cor: oklch(from var(--partido) var(--l9) calc(c * var(--c9)) h); }
+}
+.dens-1, .dens-2, .dens-3, .dens-4, .dens-5, .dens-6, .dens-7, .dens-8, .dens-9 { fill: var(--cor); background: var(--cor); }
+/* Amostra da cor do partido (legenda e tabela do mapa "quem venceu"). */
+.cor-partido { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: none; background: var(--partido); vertical-align: -1px; }
 /* Mapa do município: áreas dos locais de votação (recortadas pelo contorno), fronteiras e números
    das zonas. No modo zonas o contorno de cada área tem a cor da própria área (some a costura). */
 .mapa-municipio { max-height: 640px; }
@@ -541,19 +632,19 @@ section.cartao { padding: 18px 20px; }
 .mapa-painel-conteudo .esqueleto, .mapa-painel-conteudo .aviso { box-shadow: none; padding: 0; border: 0; }
 .painel-nota { font-size: .84rem; color: var(--texto-2); }
 .tabela-detalhe { display: block; color: var(--texto-3); font-size: .78rem; }
-.painel-titulo { font-size: 1.55rem; font-weight: 700; }
+.painel-titulo { font-size: 1.5rem; }
 .painel-kpis { display: flex; gap: 22px; }
 .painel-kpis div { display: grid; }
 .painel-kpis div { border-top: 2px solid var(--texto); padding-top: 6px; }
-.painel-kpis strong { font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.painel-kpis strong { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .painel-kpis span { font-size: .78rem; color: var(--texto-3); }
 
 /* ---------------------------------------------------------------- sobre */
 
 .sobre article { padding: 34px 40px; display: grid; gap: 14px; width: 100%; max-width: 820px; margin-inline: auto; }
-.sobre h2 { font-size: 2.2rem; font-weight: 700; padding-bottom: 12px; border-bottom: 1px solid var(--borda-forte); }
+.sobre h2 { font-size: 2rem; padding-bottom: 12px; border-bottom: 1px solid var(--borda-forte); }
 .sobre h3 { margin-top: 14px; font-size: 1.35rem; }
-.sobre p, .sobre li, .sobre dd { color: var(--texto-2); font-family: var(--serifa); font-size: 1.12rem; line-height: 1.6; }
+.sobre p, .sobre li, .sobre dd { color: var(--texto-2); font-size: 1rem; line-height: 1.65; }
 .sobre .recorte-sub { font-family: var(--fonte); font-size: .84rem; }
 .sobre ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .fontes-lista { margin: 0; display: grid; gap: 4px 0; }
@@ -587,6 +678,10 @@ section.cartao { padding: 18px 20px; }
   .filtros { padding: 14px; }
   .filtros-cascata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filtros-rodape { flex-direction: column; align-items: flex-start; }
+  /* Busca e candidato escolhido um embaixo do outro (lado a lado o nome ficava espremido). */
+  .filtros-busca { flex-direction: column; align-items: stretch; }
+  .filtros-busca > .combo { flex: none; width: 100%; }
+  .cand-chip { max-width: none; }
   .tabela td, .tabela th { padding: 9px 6px; }
   .mapa-area { min-height: 200px; }
   section.cartao { padding: 14px; }
@@ -605,7 +700,8 @@ section.cartao { padding: 18px 20px; }
   .botao-secundario, .botao-primario, .botao-texto { min-height: 44px; }
   .combo-lista { max-height: 55vh; }
   .combo-item { padding: 10px; }
-  .heroi h1 { font-size: 2.4rem; }
+  .heroi h1 { font-size: 2.3rem; }
+  body[data-pagina="resultados"]:has(.filtros-so-busca) .heroi { padding-bottom: 120px; }
   .heroi-lema { font-size: 1.05rem; }
   .sobre article { padding: 22px 18px; }
   .sobre h2 { font-size: 1.8rem; }
@@ -658,6 +754,7 @@ button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-list
 /* Mapa: uma única animação no <svg> inteiro (as cores "pintam" da esquerda para a direita com
    um recorte que se abre), em vez de uma animação por área, que pesava em estados e cidades grandes. */
 .mapa-pilha { animation: revelar .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+.heroi-arte .ave { transform-box: fill-box; }
 .mapa-pilha.por-zoom { animation: mapa-zoom .5s cubic-bezier(.2, .8, .2, 1) backwards; transform-origin: center; }
 .mapa-pilha.saida-zoom { animation: none; } /* o próprio zoom (viewBox) anima a volta */
 .mapa-pilha-municipio { animation: mapa-zoom .6s cubic-bezier(.2, .8, .2, 1) backwards; transform-origin: center; }
@@ -676,7 +773,7 @@ button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-list
 @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
 
 /* Logo do topo: volta ao início com os filtros limpos. */
-.marca-topo { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); text-decoration: none; font-family: var(--serifa); font-weight: 700; font-size: 1.28rem; letter-spacing: -.015em; border-radius: var(--raio-p); padding: 4px 6px; margin-left: -6px; }
+.marca-topo { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); text-decoration: none; font-family: var(--serifa); font-weight: 600; font-size: 1.25rem; border-radius: var(--raio-p); padding: 4px 6px; margin-left: -6px; }
 .marca-topo:hover { background: var(--vidro); }
 .marca-topo-logo { width: 28px; height: 28px; flex: none; transition: transform .25s ease; }
 .marca-topo:hover .marca-topo-logo { transform: rotate(-12deg) scale(1.08); }

@@ -1,10 +1,13 @@
 // Mapa de densidade de votos do candidato filtrado, em três níveis de zoom:
 //   Brasil (por estado, para Presidente) › Estado (por município) › Município (por local de votação).
-// Cada área ou local é colorido pelo % dos votos válidos que o candidato recebeu ali: quanto maior
-// o percentual, mais forte a cor. Clicar em um estado ou município aproxima o mapa; clicar em um
-// local de votação aplica o filtro do local.
+// Cada área ou local é colorido pelo % dos votos válidos que o candidato recebeu ali, numa escala
+// da cor do partido dele: quanto maior o percentual, mais forte a cor. Clicar em um estado aproxima
+// o mapa; clicar em um município aproxima (página inicial) ou só o seleciona (aba Mapa).
+// Aba Mapa, sem candidato, num estado: mapa "quem venceu" — cada município na cor do partido do
+// mais votado do cargo escolhido nos atalhos ao lado, e os 3 mais votados do município clicado.
 
-import { h, limpar, numero, pct, titulo, icone } from '../dom.js';
+import { h, limpar, numero, pct, titulo, icone, fotoCandidato } from '../dom.js';
+import { corPartido } from '../partidos.js';
 import { api } from '../api.js';
 import { estado, contexto, definir, urlPara } from '../estado.js';
 import { mostrarTooltip, esconderTooltip } from '../grafico.js';
@@ -62,6 +65,31 @@ function dica(nome, a, detalhe) {
   return { texto, el };
 }
 
+// Mapa "quem venceu": nome, mais votado (partido) e o percentual dele em negrito.
+function dicaVencedor(nome, a) {
+  const v = a?.top?.[0];
+  const texto = v ? `${nome}. Mais votado: ${titulo(v.nome)} (${v.partido}), ${numero(v.votos)} votos, ${pct(v.percentual)} dos votos válidos` : `${nome}. Sem dados de votação`;
+  const el = h('div', { class: 'tt-dens' },
+    h('strong', { text: nome }),
+    v ? [h('span', {}, amostraPartido(v.partido), ` ${titulo(v.nome)} · ${v.partido}`),
+      h('span', {}, h('strong', { class: 'tt-pct', text: pct(v.percentual) }), ` · ${numero(v.votos)} votos`)]
+      : h('span', { text: 'Sem dados de votação.' }));
+  return { texto, el };
+}
+
+// Quadradinho na cor do partido (legenda, tooltip e lista dos mais votados).
+function amostraPartido(sigla) {
+  const el = h('span', { class: 'cor-partido', 'aria-hidden': 'true' });
+  el.style.setProperty('--partido', corPartido(sigla));
+  return el;
+}
+
+// Atalhos de cargo do mapa "quem venceu" (só os que existem na UF: Distrital só no DF).
+const ROTULO_CURTO = { presidente: 'Presidente', governador: 'Governador', deputado_federal: 'Dep. Federal', deputado_estadual: 'Dep. Estadual', deputado_distrital: 'Dep. Distrital' };
+function cargosRapidos(uf) {
+  return contexto.config.cargos.filter(c => ROTULO_CURTO[c.id] && (!c.somente || c.somente.includes(uf)) && (!c.exceto || !c.exceto.includes(uf)));
+}
+
 // Candidato do filtro, se valer para o cargo e a UF do mapa (números se repetem entre estados).
 function candidatoDoMapa(cargo) {
   const c = contexto.candidato;
@@ -89,7 +117,9 @@ let ultimaRolagem = 0;
 globalThis.addEventListener?.('scroll', () => { ultimaRolagem = performance.now(); }, { passive: true });
 const semAnimacao = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-export function criarPaginaMapa(raiz) {
+// abrirCidade: clicar (ou aproximar) num município abre o mapa por zona/local (página inicial).
+// Na aba Mapa é false: o clique só seleciona o município.
+export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
   const instancia = ++instancias;
   const titulo1 = h('h2');
   const subtitulo = h('p', { class: 'recorte-sub' });
@@ -118,9 +148,11 @@ export function criarPaginaMapa(raiz) {
   let modo = null; // mapa do município: 'zonas' | 'locais' (null = automático)
   // Troca de nível feita pelo zoom: { de } = id do lugar de onde se saiu (o novo mapa começa nele).
   let porZoom = null, chegada = null;
+  let cargoVenc = ''; // mapa "quem venceu": cargo escolhido nos atalhos (vazio = mapa neutro)
+  const POR_VEZ = 10; // mais votados mostrados por vez no painel ("Ver mais" mostra outros 10)
   const trocarPorZoom = (mudanca, de = '') => { porZoom = { de }; definir(mudanca); };
 
-  const nivelAtual = () => (!estado.uf ? 'brasil' : estado.mun && contexto.config.detalhadas.includes(estado.uf) ? 'municipio' : 'uf');
+  const nivelAtual = () => (!estado.uf ? 'brasil' : abrirCidade && estado.mun && contexto.config.detalhadas.includes(estado.uf) ? 'municipio' : 'uf');
   const idSelecionado = () => (atual?.nivel === 'municipio'
     ? (atual.modo === 'zonas' ? estado.zona : estado.local ? `${estado.zona}|${estado.local}` : '')
     : atual?.nivel === 'uf' ? estado.mun : '');
@@ -139,6 +171,7 @@ export function criarPaginaMapa(raiz) {
 
   // Painel: votos do candidato no item escolhido (estado, município ou local) ou no total do mapa.
   function desenharPainel() {
+    if (vencedoresAtivo()) return painelVencedores();
     if (!atual) return;
     const { nivel, cand, cargo, itens, areas } = atual;
     const sel = itens.find(it => it.id === idSelecionado());
@@ -163,6 +196,74 @@ export function criarPaginaMapa(raiz) {
       estado.pagina === 'resultados' ? null : h('a', { class: 'botao-primario', href: urlPara('resultados') }, 'Ver resultado do candidato'));
   }
 
+  const vencedoresAtivo = () => !abrirCidade && !atualCand && nivelAtual() === 'uf';
+
+  // Painel do mapa "quem venceu": atalhos de cargo e os mais votados do município escolhido
+  // (10 por vez; "Ver mais" acrescenta outros 10 dentro de uma caixa com rolagem, sem esticar a página).
+  function painelVencedores() {
+    const chips = h('div', { class: 'chips-cargo', role: 'radiogroup', 'aria-label': 'Cargo do mapa' },
+      cargosRapidos(estado.uf).map(c => h('button', {
+        type: 'button', role: 'radio', class: 'chip-cargo', 'aria-checked': String(cargoVenc === c.id),
+        onclick: () => { if (cargoVenc !== c.id) { cargoVenc = c.id; desenhar(); } },
+      }, ROTULO_CURTO[c.id])));
+    const partes = [h('h3', { class: 'painel-titulo', text: 'Quem venceu em cada cidade' }), chips];
+    const sel = atual?.vencedores && atual.itens.find(it => it.id === estado.mun);
+    const a = sel && atual.vencedores.get(sel.id);
+    if (a?.ranking?.length) partes.push(rankingMunicipio(sel, a));
+    else if (sel && atual?.vencedores) partes.push(informacao(`Sem votos registrados em ${sel.nome}.`));
+    limpar(painel, partes);
+  }
+
+  function rankingMunicipio(sel, a) {
+    const total = a.ranking.length;
+    const linha = ([num, votos], i) => {
+      const c = atual.candidato(num);
+      return h('tr', {},
+        h('td', { class: 'ranking-pos', text: `${i + 1}º` }),
+        h('td', {}, h('div', { class: 'ranking-cand' }, fotoCandidato(c, 'ranking-foto'),
+          h('div', { class: 'ranking-texto' },
+            c.id ? h('button', { type: 'button', class: 'ranking-nome', title: 'Ver o mapa deste candidato', onclick: () => definir({ cand: c.id, cargo: atual.cargo.id, turno: '1' }) }, titulo(c.nome))
+              : h('strong', { text: titulo(c.nome) }),
+            h('small', {}, amostraPartido(c.partido), ` ${c.partido || '—'}`)))),
+        h('td', { class: 'num', text: numero(votos) }),
+        h('td', { class: 'num' }, h('strong', { text: pct(a.validos ? (votos / a.validos) * 100 : 0) })));
+    };
+    let mostrados = Math.min(POR_VEZ, total);
+    const corpo = h('tbody', {}, a.ranking.slice(0, mostrados).map(linha));
+    const subtitulo = h('h4', { class: 'painel-subtitulo' });
+    const rolagem = h('div', { class: 'ranking-rolagem' },
+      h('table', { class: 'tabela tabela-compacta tabela-ranking' },
+        h('caption', { class: 'sr-only', text: `Mais votados para ${atual.cargo.nome} em ${sel.nome}, 1º turno` }),
+        h('thead', {}, h('tr', {}, h('th', { scope: 'col', text: 'Pos.' }), h('th', { scope: 'col', text: 'Candidato' }), h('th', { scope: 'col', class: 'num', text: 'Votos' }), h('th', { scope: 'col', class: 'num', text: '%' }))),
+        corpo));
+    const mais = h('button', { type: 'button', class: 'ranking-mais' });
+    const atualizar = () => {
+      subtitulo.textContent = `${sel.nome} · ${mostrados === total ? (total === 1 ? 'único votado' : `todos os ${numero(total)} votados`) : `${mostrados} mais votados de ${numero(total)}`}`;
+      mais.hidden = mostrados >= total;
+      mais.textContent = `Ver mais (${Math.min(POR_VEZ, total - mostrados)})`;
+    };
+    mais.onclick = () => {
+      const de = mostrados;
+      mostrados = Math.min(total, mostrados + POR_VEZ);
+      corpo.append(...a.ranking.slice(de, mostrados).map((r, k) => linha(r, de + k)));
+      atualizar();
+      // A caixa rola até as novas linhas (a página não cresce).
+      corpo.rows[de]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    atualizar();
+    return h('div', { class: 'painel-ranking' }, subtitulo, rolagem, mais);
+  }
+
+  // Legenda do mapa "quem venceu": partidos que venceram em mais municípios e o que o tom indica.
+  function legendaVencedores(cargo, contagem, escala) {
+    const ordem = [...contagem].sort((a, b) => b[1] - a[1]);
+    return h('div', { class: 'legenda-densidade' },
+      h('p', { class: 'legenda-titulo', text: `Partido do mais votado para ${cargo.nome} em cada município · 1º turno` }),
+      h('ul', { class: 'legenda legenda-partidos' }, ordem.map(([sigla, n]) =>
+        h('li', {}, amostraPartido(sigla), h('span', { text: `${sigla || 'Sem partido'} · ${numero(n)}` })))),
+      h('p', { class: 'legenda-nota', text: `Tom mais forte = maior % dos votos válidos para o vencedor (escala até ${pctCurto(escala.topo)}${escala.teto ? ' ou mais' : ''}).` }));
+  }
+
   function tabelaDados(cand, itens, areas, colunaNome, unidade) {
     const linhas = itens.map(it => ({ it, a: areas.get(it.id) })).filter(x => x.a?.votos).sort((x, y) => y.a.percentual - x.a.percentual);
     if (!linhas.length) return limpar(tabela);
@@ -183,6 +284,10 @@ export function criarPaginaMapa(raiz) {
     const cargo = contexto.config.cargos.find(c => c.id === estado.cargo);
     const cand = candidatoDoMapa(cargo);
     atualCand = cand;
+    // Escala de densidade na cor do partido do candidato.
+    if (cand) layout.style.setProperty('--partido', corPartido(cand.partido)); else layout.style.removeProperty('--partido');
+    const venc = vencedoresAtivo();
+    const cargoV = venc && cargoVenc ? cargosRapidos(estado.uf).find(c => c.id === cargoVenc) : null;
     if (nivel !== 'municipio') modoSel.hidden = true;
     const nomeUf = contexto.config.ufs.find(u => u.sigla === estado.uf)?.nome || estado.uf;
     // Voltar: do município para o estado; do estado para o Brasil (não para candidato estadual,
@@ -199,24 +304,29 @@ export function criarPaginaMapa(raiz) {
     apagaveis = new Map();
     camadaSelecao = null;
     const unidadeNome = { brasil: 'estado', uf: 'município', municipio: 'local de votação' }[nivel];
+    const cliqueMun = abrirCidade ? 'um município para ver os locais de votação' : 'um município';
     subtitulo.textContent = cand
-      ? `Densidade de votos de ${titulo(cand.nome)} por ${unidadeNome} · ${estado.turno}º turno. ${nivel === 'municipio' ? 'Clique em um local.' : `Clique em ${nivel === 'brasil' ? 'um estado' : 'um município para ver os locais de votação'}.`}`
+      ? `Densidade de votos de ${titulo(cand.nome)} por ${unidadeNome} · ${estado.turno}º turno. ${nivel === 'municipio' ? 'Clique em um local.' : `Clique em ${nivel === 'brasil' ? 'um estado' : cliqueMun}.`}`
       : '';
-    // Sem candidato: só o mapa, sem textos repetindo "busque um candidato" e sem o painel lateral.
-    lateral.hidden = !cand;
-    layout.classList.toggle('sem-painel', !cand);
-    if (!cand) limpar(painel);
+    // Sem candidato: só o mapa, sem textos repetindo "busque um candidato" e sem o painel lateral
+    // (na aba Mapa, dentro de um estado, o painel traz os atalhos do mapa "quem venceu").
+    lateral.hidden = !cand && !venc;
+    layout.classList.toggle('sem-painel', !cand && !venc);
+    if (venc) painelVencedores();
+    else if (!cand) limpar(painel);
     else if (nivel === 'brasil' && !cargo.nacional) aviso(`Escolha um estado no mapa para ver os votos de ${titulo(cand.nome)}.`);
     else limpar(painel, esqueleto(4));
     try {
-      const pedir = !cand || (nivel === 'brasil' && !cargo.nacional) ? Promise.resolve(null)
+      const pedir = cargoV ? api('/api/mapa/vencedores', { cargo: cargoV.id, turno: 1, uf: estado.uf }).catch(e => ({ falha: e }))
+        : !cand || (nivel === 'brasil' && !cargo.nacional) ? Promise.resolve(null)
         : (nivel === 'municipio'
           ? api('/api/mapa/locais', { cargo: cargo.id, turno: estado.turno, uf: estado.uf, mun: estado.mun, numero: cand.numero })
           : api('/api/mapa/candidato', { cargo: cargo.id, turno: estado.turno, uf: estado.uf, numero: cand.numero })).catch(e => ({ falha: e }));
       const [malha, dens] = await Promise.all([nivel === 'brasil' ? api('/api/mapa/brasil') : api('/api/mapa/uf', { uf: estado.uf }), pedir]);
       if (minha !== seq) return;
       const ok = dens && !dens.falha;
-      const svg = nivel === 'municipio' ? desenharMunicipio(malha, ok ? dens : null) : desenharAreas(nivel, malha, ok ? dens : null);
+      const svg = nivel === 'municipio' ? desenharMunicipio(malha, ok ? dens : null)
+        : desenharAreas(nivel, malha, ok && !cargoV ? dens : null, ok && cargoV ? dens : null);
       if (!svg) return;
       limpar(area, svg);
       ajuda.hidden = !cand || !svg.classList.contains('mapa-pilha');
@@ -227,6 +337,14 @@ export function criarPaginaMapa(raiz) {
         return;
       }
       if (!ok) return;
+      if (cargoV) {
+        atual = { nivel, cargo: cargoV, itens: svg.itens, vencedores: svg.vencedores, candidato: dens.candidato };
+        subtitulo.textContent = 'Clique em um município para ver os mais votados.';
+        limpar(leg, legendaVencedores(cargoV, svg.contagem, svg.escala));
+        destacarSelecao();
+        painelVencedores();
+        return;
+      }
       atual = { nivel, modo: svg.modo, cand, cargo, itens: svg.itens, areas: svg.areas };
       destacarSelecao();
       limpar(leg, legenda(titulo(cand.nome), svg.escala, svg.unidade || unidadeNome), svg.nota || null);
@@ -442,27 +560,43 @@ export function criarPaginaMapa(raiz) {
   }
 
   // Brasil (UFs) ou estado (municípios): poucas centenas de áreas, uma por caminho (data-i).
-  function desenharAreas(nivel, malha, dens) {
+  // venc: mapa "quem venceu" ({ areas: { município: { validos, top: [3 mais votados] } } }).
+  function desenharAreas(nivel, malha, dens, venc) {
     const nacional = nivel === 'brasil';
     const itens = nacional ? malha.ufs.map(u => ({ id: u.uf, nome: u.nome, d: u.d, cx: u.cx, cy: u.cy })) : malha.municipios.map(m => ({ id: m.cd, nome: titulo(m.nm), d: m.d }));
     const areas = new Map(dens ? Object.entries(dens.areas) : []);
-    const escala = dens ? escalaDensidade([...areas.values()], dens.max) : null;
+    const vencedores = venc ? new Map(Object.entries(venc.areas)) : null;
+    // Vencedor de cada município como "área" (votos e % do 1º colocado) para usar a mesma escala.
+    const doVencedor = a => (a?.top?.[0] ? { votos: a.top[0].votos, validos: a.validos, percentual: a.top[0].percentual } : null);
+    const escala = dens ? escalaDensidade([...areas.values()], dens.max)
+      : venc ? escalaDensidade([...vencedores.values()].map(doVencedor), Math.max(0, ...[...vencedores.values()].map(a => a.top[0]?.percentual || 0))) : null;
+    const contagem = new Map(); // partido -> municípios vencidos
     const svg = h('svg:svg', { viewBox: malha.viewBox, class: 'mapa-svg', role: 'group', 'aria-label': `Mapa: ${titulo1.textContent}` });
     const grupo = h('svg:g', { class: 'mapa-areas' });
     const alvos = [];
     itens.forEach((it, i) => {
       const a = areas.get(it.id);
-      const { texto } = dica(it.nome, dens ? a : null);
+      const v = vencedores?.get(it.id);
+      const { texto } = venc ? dicaVencedor(it.nome, v) : dica(it.nome, dens ? a : null);
       alvos.push({
         d: it.d,
-        conteudo: () => (dens ? dica(it.nome, a).el : dica(it.nome, null).el.firstChild),
-        escolher: () => (nacional ? definir({ uf: it.id }) : definir({ mun: it.id })),
+        conteudo: () => (venc ? dicaVencedor(it.nome, v).el : dens ? dica(it.nome, a).el : dica(it.nome, null).el.firstChild),
+        // Aba Mapa: clicar de novo no município escolhido desfaz a seleção.
+        escolher: () => (nacional ? definir({ uf: it.id }) : definir({ mun: !abrirCidade && estado.mun === it.id ? '' : it.id })),
       });
-      grupo.append(h('svg:path', {
-        d: it.d, class: `mapa-regiao ${dens ? classeDensidade(a, escala.topo) : 'mapa-neutro'}`, 'aria-label': dens ? texto : it.nome, 'data-i': i,
+      const classe = venc ? classeDensidade(doVencedor(v), escala.topo) : dens ? classeDensidade(a, escala.topo) : 'mapa-neutro';
+      const p = h('svg:path', {
+        d: it.d, class: `mapa-regiao ${classe}`, 'aria-label': dens || venc ? texto : it.nome, 'data-i': i,
         // Teclado: só as 27 UFs viram paradas de Tab; municípios são escolhidos pelo filtro ou pela tabela.
         tabindex: nacional ? '0' : undefined, role: nacional ? 'button' : undefined,
-      }));
+      });
+      // Quem venceu: a escala de cada município é a do partido do vencedor.
+      const vencedor = v?.top?.[0];
+      if (vencedor) {
+        p.style.setProperty('--partido', corPartido(vencedor.partido));
+        contagem.set(vencedor.partido, (contagem.get(vencedor.partido) || 0) + 1);
+      }
+      grupo.append(p);
       dePorId.set(it.id, it.d);
     });
     svg.append(grupo);
@@ -478,7 +612,7 @@ export function criarPaginaMapa(raiz) {
       maximo: nacional ? 40 : 120,
       inicial: chegada?.de && dePorId.has(chegada.de) ? caixa(dePorId.get(chegada.de)) : null,
       sair: nacional || voltar.hidden ? null : () => trocarPorZoom({ uf: '' }, estado.uf),
-      entrar: nacional || abreMunicipio ? (cx, cy, vista) => {
+      entrar: nacional || (abreMunicipio && abrirCidade) ? (cx, cy, vista) => {
         const p = document.elementFromPoint(cx, cy)?.closest?.('[data-i]');
         const it = p && svg.contains(p) ? itens[Number(p.dataset.i)] : null;
         if (!it || !ocupaVista(it.d, vista)) return false;
@@ -486,7 +620,7 @@ export function criarPaginaMapa(raiz) {
         return true;
       } : null,
     });
-    return Object.assign(el, { itens, areas, escala });
+    return Object.assign(el, { itens, areas, escala, vencedores, contagem });
   }
 
   // Município: áreas dos locais de votação (Voronoi, recortadas pelo contorno da cidade).

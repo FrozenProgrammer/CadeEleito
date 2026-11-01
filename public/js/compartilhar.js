@@ -4,7 +4,7 @@
 import { h, numero, pct, icone } from './dom.js';
 
 const LADO = 1080;
-// Mesmas fontes do site (public/fonts): Inter nos números e textos, Newsreader (serifa) na marca e no nome.
+// Mesmas fontes do site (public/fonts): Inter nos números e textos, Newsreader na marca e no nome.
 const FONTE = '"Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif';
 const SERIFA = '"Newsreader", Georgia, "Times New Roman", serif';
 const fonte = (peso, tam) => `${peso} ${tam}px ${FONTE}`;
@@ -73,7 +73,7 @@ function desenharFoto(g, img, x, y, w, alt) {
 export async function desenharImagem(i) {
   const foto = await carregarFoto(i.foto);
   // O canvas só usa a fonte da página se ela já estiver carregada.
-  await Promise.all([document.fonts?.load(serifa(700, 68)), document.fonts?.load(fonte(800, 56))]).catch(() => {});
+  await Promise.all([document.fonts?.load(serifa(600, 68)), document.fonts?.load(fonte(800, 56))]).catch(() => {});
   const cv = document.createElement('canvas');
   cv.width = LADO; cv.height = LADO;
   const g = cv.getContext('2d');
@@ -88,7 +88,7 @@ export async function desenharImagem(i) {
 
   // Marca e eleição.
   logo(g, M, 66, 72);
-  g.fillStyle = '#eef1f5'; g.font = serifa(700, 48); g.textAlign = 'left';
+  g.fillStyle = '#eef1f5'; g.font = serifa(600, 48); g.textAlign = 'left';
   g.fillText('Cadê o eleito?', M + 90, 118);
   g.fillStyle = '#8ab4f8'; g.font = fonte(700, 28); g.textAlign = 'right';
   g.fillText(`Eleições 2026 · ${i.turno}º turno`, LADO - M, 114);
@@ -113,7 +113,7 @@ export async function desenharImagem(i) {
     g.fillStyle = '#6ee7a0'; g.fillText('ELEITO', M + largNum + 40, y + 59);
   }
   y += 170;
-  g.fillStyle = '#ffffff'; g.font = serifa(700, 74);
+  g.fillStyle = '#ffffff'; g.font = serifa(600, 70);
   for (const l of linhas(g, i.nome, largTexto, 2)) { g.fillText(l, M, y); y += 78; }
   g.fillStyle = '#b6bdc8'; g.font = fonte(600, 32);
   for (const l of linhas(g, [i.partido, i.cargo, i.uf !== 'BR' ? i.uf : ''].filter(Boolean).join(' · '), largTexto, 2)) { g.fillText(l, M, y + 4); y += 40; }

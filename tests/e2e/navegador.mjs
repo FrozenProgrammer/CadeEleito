@@ -97,6 +97,8 @@ async function abrir(hash, { primeiraVisita = false, tema = 'escuro' } = {}) {
 }
 async function foto(nome) {
   if (!FOTOS) return;
+  // Captura depois das animações de entrada (as infinitas, como os passarinhos, não contam).
+  await aguardar('!document.getAnimations().some(a => a.playState === "running" && isFinite(a.effect?.getComputedTiming().endTime))', 6000);
   fs.mkdirSync(FOTOS, { recursive: true });
   fs.writeFileSync(path.join(FOTOS, `${nome}.png`), Buffer.from((await cmd('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64'));
 }
@@ -162,6 +164,9 @@ await caso('Sem candidato: só a busca (sem cargo, turno, cascata, cartão ou ma
   verificar(await avaliar('return !document.querySelector("#f-cargo")'), 'o filtro de cargo não deveria existir');
   verificar(await avaliar('return getComputedStyle(document.querySelector(".filtros-cascata")).display === "none" && getComputedStyle(document.querySelector(".campo-turno")).display === "none"'), 'turno/cascata não deveriam aparecer');
   verificar(await avaliar('return !document.querySelector(".cartao-social") && document.querySelector("#pagina-resultados .resultados-mapa").hidden'), 'cartão/mapa não deveriam aparecer');
+  // A busca fica centrada na divisa entre o fundo da ilustração (fim do herói) e o fundo da página.
+  const desvio = await avaliar('const f = document.querySelector("#filtros").getBoundingClientRect(), hb = document.querySelector(".heroi").getBoundingClientRect().bottom; return Math.abs((f.top + f.bottom) / 2 - hb)');
+  verificar(desvio < 2, `a busca deveria ficar centrada na divisa do fundo (desvio de ${desvio.toFixed(1)} px)`);
   // Links antigos só com cargo também abrem só com a busca.
   await abrir('#/resultados?cargo=presidente&uf=SP');
   verificar(await aguardar('!location.hash.includes("cargo=")'), 'cargo sem candidato deveria sair da URL');
@@ -279,12 +284,35 @@ await caso('Local de votação e seção (AC, capital) aparecem no cartão', asy
   verificar(await aguardar(`document.querySelector(".social-local strong") && /Seção ${localAc.secoes[0]}/.test(document.querySelector(".social-local strong").textContent)`), 'seção não carregou no cartão');
 });
 
-await caso('Mapa sem candidato: mapa neutro, sem legenda, sem painel lateral nem textos repetidos', async () => {
-  await abrir('#/mapa?cargo=governador&uf=MG');
-  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path").length > 100', 12000), 'mapa de MG não carregou');
-  verificar(await avaliar('return [...document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao")].every(p => p.classList.contains("mapa-neutro"))'), 'mapa deveria estar neutro');
-  verificar(await avaliar('return !document.querySelector("#pagina-mapa .legenda-densidade") && document.querySelector("#pagina-mapa .mapa-painel").hidden && !document.querySelector("#pagina-mapa .mapa-cartao .recorte-sub").textContent && document.querySelector("#pagina-mapa .mapa-dica").hidden'), 'sem candidato: sem legenda, painel escondido e sem textos');
+await caso('Mapa sem candidato: Brasil sem painel; no estado, atalhos de cargo, cor do partido vencedor e top 10 com "Ver mais"', async () => {
+  await abrir('#/mapa');
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao").length === 27', 12000), 'mapa do Brasil não carregou');
+  verificar(await avaliar('return !document.querySelector("#pagina-mapa .legenda-densidade") && document.querySelector("#pagina-mapa .mapa-painel").hidden && !document.querySelector("#pagina-mapa .mapa-cartao .recorte-sub").textContent && document.querySelector("#pagina-mapa .mapa-dica").hidden'), 'Brasil sem candidato: sem legenda, painel escondido e sem textos');
   verificar(await avaliar('const m = document.querySelector("#pagina-mapa .mapa-cartao").getBoundingClientRect().width, p = document.querySelector("#pagina-mapa .pagina-conteudo").getBoundingClientRect().width; return m > p - 4'), 'sem o painel, o mapa deveria ocupar a largura toda');
+  await abrir('#/mapa?uf=SP');
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao").length > 600 && document.querySelectorAll("#pagina-mapa .chip-cargo").length >= 4', 15000), 'estado sem os atalhos de cargo');
+  verificar(await avaliar('return [...document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao")].every(p => p.classList.contains("mapa-neutro")) && !document.querySelector("#pagina-mapa .mapa-painel").hidden'), 'antes de escolher o cargo o mapa fica neutro, com o painel visível');
+  await avaliar('[...document.querySelectorAll("#pagina-mapa .chip-cargo")].find(b => b.textContent === "Governador").click(); return 1');
+  verificar(await aguardar('document.querySelector("#pagina-mapa .legenda-partidos li") && document.querySelectorAll("#pagina-mapa .mapa-svg path[class*=dens-]").length > 600', 15000), 'Governador não coloriu o mapa');
+  // Cada município na escala do partido do vencedor (a cor vem de --partido em cada área).
+  const r = await avaliar(`
+    const ps = [...document.querySelectorAll('#pagina-mapa .mapa-svg path[class*=dens-]')];
+    const partidos = new Set(ps.map(p => p.style.getPropertyValue('--partido')).filter(Boolean));
+    return { partidos: partidos.size, comCor: ps.every(p => getComputedStyle(p).fill !== 'none') };`);
+  verificar(r.partidos >= 1 && r.comCor, 'municípios sem a cor do partido do vencedor');
+  // Clicar num município só o seleciona (não abre o mapa por zona) e mostra os 10 mais votados.
+  await avaliar('const svg = document.querySelector("#pagina-mapa .mapa-svg"), p = svg.querySelectorAll("path.mapa-regiao")[100], b = p.getBoundingClientRect(); p.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: b.x + b.width / 2, clientY: b.y + b.height / 2 })); return 1');
+  verificar(await aguardar('/mun=\\d+/.test(location.hash) && document.querySelectorAll("#pagina-mapa .tabela-ranking tbody tr").length >= 1', 10000), 'clique no município não mostrou os mais votados');
+  verificar(await avaliar('return document.querySelectorAll("#pagina-mapa .tabela-ranking tbody tr").length <= 10 && !document.querySelector("#pagina-mapa .mapa-pilha-municipio") && !!document.querySelector("#pagina-mapa .mapa-selecao[d]")'), 'aba Mapa: clique deveria só selecionar o município (até 10 linhas, sem abrir o mapa por zona)');
+  // Deputado Federal (muitos candidatos): 10 linhas, "Ver mais" acrescenta 10 dentro da caixa com rolagem.
+  await avaliar('[...document.querySelectorAll("#pagina-mapa .chip-cargo")].find(b => b.textContent === "Dep. Federal").click(); return 1');
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .tabela-ranking tbody tr").length === 10 && !document.querySelector("#pagina-mapa .ranking-mais").hidden', 15000), 'Dep. Federal deveria mostrar 10 linhas e o botão Ver mais');
+  const antes = await avaliar('return document.querySelector("#pagina-mapa .mapa-painel").getBoundingClientRect().height');
+  await avaliar('document.querySelector("#pagina-mapa .ranking-mais").click(); return 1');
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .tabela-ranking tbody tr").length === 20'), '"Ver mais" deveria acrescentar 10 linhas');
+  const depois = await avaliar('const c = document.querySelector("#pagina-mapa .ranking-rolagem"); return { h: document.querySelector("#pagina-mapa .mapa-painel").getBoundingClientRect().height, rola: c.scrollHeight > c.clientHeight, ordem: [...c.querySelectorAll("tbody tr td:first-child")].map(td => parseInt(td.textContent)).every((n, i) => n === i + 1) }');
+  verificar(depois.rola && depois.h - antes < 120 && depois.ordem, `a lista deveria rolar dentro da caixa sem esticar o painel (${antes} -> ${depois.h} px)`);
+  await foto('03b-mapa-quem-venceu');
 });
 
 await caso('Mapa de densidade (SP): só o candidato filtrado, cor mais forte = maior %, legenda com escala', async () => {
@@ -326,45 +354,45 @@ await caso('Mapa do Brasil (Presidente): 27 estados por teclado, legenda, e o ca
   verificar(await aguardar('document.querySelector("#pagina-mapa .legenda-densidade")', 12000), 'mapa do estado sem densidade');
 });
 
-await caso('Zoom no município (zonas): áreas das zonas com números, clique mostra os bairros da zona', async () => {
+await caso('Zoom no município (zonas, página inicial): áreas das zonas com números, clique mostra os bairros da zona', async () => {
   const [id] = candSp;
-  await abrir(`#/mapa?cand=${id}&uf=SP&mun=${capitalSp.cd}`);
-  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-zona").length > 40 && document.querySelector("#pagina-mapa .legenda-densidade")', 20000), 'áreas do município não apareceram');
-  verificar(await avaliar('return !document.querySelector("#pagina-mapa .mapa-ponto, #pagina-mapa circle")'), 'não deveria haver pontos (bolinhas) no mapa');
-  verificar(await avaliar('return !!document.querySelector("#pagina-mapa .modo-zonas .mapa-fronteira") && document.querySelectorAll("#pagina-mapa .mapa-rotulos-zona text").length > 20'), 'fronteiras/números das zonas ausentes');
-  verificar(await avaliar('return /zona eleitoral/.test(document.querySelector("#pagina-mapa .legenda-titulo").textContent)'), 'legenda deveria ser por zona eleitoral');
+  await abrir(`#/resultados?cand=${id}&uf=SP&mun=${capitalSp.cd}`);
+  verificar(await aguardar('document.querySelectorAll("#pagina-resultados .mapa-zona").length > 40 && document.querySelector("#pagina-resultados .legenda-densidade")', 20000), 'áreas do município não apareceram');
+  verificar(await avaliar('return !document.querySelector("#pagina-resultados .mapa-ponto, #pagina-resultados .mapa-svg circle")'), 'não deveria haver pontos (bolinhas) no mapa');
+  verificar(await avaliar('return !!document.querySelector("#pagina-resultados .modo-zonas .mapa-fronteira") && document.querySelectorAll("#pagina-resultados .mapa-rotulos-zona text").length > 20'), 'fronteiras/números das zonas ausentes');
+  verificar(await avaliar('return /zona eleitoral/.test(document.querySelector("#pagina-resultados .legenda-titulo").textContent)'), 'legenda deveria ser por zona eleitoral');
   // Áreas recortadas pelo contorno do município (clip-path com id único).
-  verificar(await avaliar('const g = document.querySelector("#pagina-mapa .mapa-areas"); const id = (g.getAttribute("clip-path") || "").match(/#([^)]+)/)?.[1]; return !!id && !!document.getElementById(id)'), 'áreas sem recorte pelo contorno');
-  const voltar = await avaliar('const b = document.querySelector("#pagina-mapa .cartao-topo .botao-secundario"); return b.hidden ? "" : b.textContent');
+  verificar(await avaliar('const g = document.querySelector("#pagina-resultados .mapa-areas"); const id = (g.getAttribute("clip-path") || "").match(/#([^)]+)/)?.[1]; return !!id && !!document.getElementById(id)'), 'áreas sem recorte pelo contorno');
+  const voltar = await avaliar('const b = document.querySelector("#pagina-resultados .cartao-topo .botao-secundario"); return b.hidden ? "" : b.textContent');
   verificar(/São Paulo/.test(voltar), `botão de voltar deveria levar ao estado: "${voltar}"`);
   // Tooltip: percentual em negrito.
   // Desempenho: uma área por zona (não milhares de caminhos) e o destaque numa camada separada.
-  verificar(await avaliar('return document.querySelectorAll("#pagina-mapa .mapa-pilha-municipio .mapa-svg path").length < 200 && !!document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-topo .mapa-hover")'), 'mapa do município deveria ter poucas formas e camada de destaque separada');
-  await avaliar('return (() => { const svg = document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-svg"); const ref = document.querySelector("#pagina-mapa .mapa-rotulos-zona text"); const r = ref.getBoundingClientRect(); svg.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return 1; })()');
+  verificar(await avaliar('return document.querySelectorAll("#pagina-resultados .mapa-pilha-municipio .mapa-svg path").length < 200 && !!document.querySelector("#pagina-resultados .mapa-pilha-municipio .mapa-topo .mapa-hover")'), 'mapa do município deveria ter poucas formas e camada de destaque separada');
+  await avaliar('return (() => { const svg = document.querySelector("#pagina-resultados .mapa-pilha-municipio .mapa-svg"); const ref = document.querySelector("#pagina-resultados .mapa-rotulos-zona text"); const r = ref.getBoundingClientRect(); svg.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return 1; })()');
   verificar(await aguardar('document.querySelector(".tooltip:not([hidden]) .tt-pct")'), 'tooltip sem o percentual em destaque');
   verificar(await avaliar('return Number(getComputedStyle(document.querySelector(".tooltip .tt-pct")).fontWeight) >= 700'), 'percentual do tooltip não está em negrito');
   // Clique numa zona: filtro da zona, outras zonas apagadas e tabela de bairros no painel.
-  await avaliar('return (() => { const svg = document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-svg"); const ref = document.querySelector("#pagina-mapa .mapa-rotulos-zona text"); const r = ref.getBoundingClientRect(); svg.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return 1; })()');
+  await avaliar('return (() => { const svg = document.querySelector("#pagina-resultados .mapa-pilha-municipio .mapa-svg"); const ref = document.querySelector("#pagina-resultados .mapa-rotulos-zona text"); const r = ref.getBoundingClientRect(); svg.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return 1; })()');
   verificar(await aguardar('/zona=\\d+/.test(location.hash) && !/local=/.test(location.hash)'), 'clique na zona não aplicou o filtro da zona');
-  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-zona.apagada").length > 10'), 'outras zonas deveriam ficar apagadas');
-  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .painel-bairros tbody tr").length > 0', 8000), 'tabela de bairros da zona não apareceu');
-  const titulo = await avaliar('return document.querySelector("#pagina-mapa .painel-bairros h4").textContent');
+  verificar(await aguardar('document.querySelectorAll("#pagina-resultados .mapa-zona.apagada").length > 10'), 'outras zonas deveriam ficar apagadas');
+  verificar(await aguardar('document.querySelectorAll("#pagina-resultados .painel-bairros tbody tr").length > 0', 8000), 'tabela de bairros da zona não apareceu');
+  const titulo = await avaliar('return document.querySelector("#pagina-resultados .painel-bairros h4").textContent');
   verificar(/Bairros da Zona \d+/.test(titulo), `título da tabela de bairros: ${titulo}`);
   await foto('04-mapa-municipio-zonas');
   // Modo locais de votação: áreas por local, clique escolhe o local e mostra bairro e seções.
   // Guarda um ponto dentro da cidade (posição do número de uma zona) para clicar no modo locais.
-  await avaliar('const r = document.querySelector("#pagina-mapa .mapa-rotulos-zona text").getBoundingClientRect(); window.__ponto = [r.x + r.width / 2, r.y + r.height / 2]; return 1');
-  await avaliar('[...document.querySelectorAll("#pagina-mapa .modo-mapa .segmento")].find(b => /Locais/.test(b.textContent)).click(); return 1');
-  verificar(await aguardar('document.querySelector("#pagina-mapa .modo-locais") && !document.querySelector("#pagina-mapa .mapa-fronteira")', 10000), 'modo locais não desenhou');
+  await avaliar('const r = document.querySelector("#pagina-resultados .mapa-rotulos-zona text").getBoundingClientRect(); window.__ponto = [r.x + r.width / 2, r.y + r.height / 2]; return 1');
+  await avaliar('[...document.querySelectorAll("#pagina-resultados .modo-mapa .segmento")].find(b => /Locais/.test(b.textContent)).click(); return 1');
+  verificar(await aguardar('document.querySelector("#pagina-resultados .modo-locais") && !document.querySelector("#pagina-resultados .mapa-fronteira")', 10000), 'modo locais não desenhou');
   await espera(700); // fim da animação de entrada (o mapa cresce de 60% a 100%)
-  await avaliar('return (() => { const svg = document.querySelector("#pagina-mapa .mapa-pilha-municipio .mapa-svg"); const ref = null; svg.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: window.__ponto[0], clientY: window.__ponto[1] })); return 1; })()');
+  await avaliar('return (() => { const svg = document.querySelector("#pagina-resultados .mapa-pilha-municipio .mapa-svg"); const ref = null; svg.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: window.__ponto[0], clientY: window.__ponto[1] })); return 1; })()');
   verificar(await aguardar('/local=\\d+/.test(location.hash)'), 'clique na área não aplicou o local');
-  verificar(await aguardar('document.querySelector("#pagina-mapa .mapa-selecao[d]") && /Seções/.test(document.querySelector("#pagina-mapa .painel-local")?.textContent || "")'), 'local escolhido sem destaque/detalhes');
-  verificar(await avaliar('return document.querySelector("#pagina-mapa .modo-mapa [aria-checked=true]").textContent.includes("Locais")'), 'o modo escolhido deveria continuar após o clique');
+  verificar(await aguardar('document.querySelector("#pagina-resultados .mapa-selecao[d]") && /Seções/.test(document.querySelector("#pagina-resultados .painel-local")?.textContent || "")'), 'local escolhido sem destaque/detalhes');
+  verificar(await avaliar('return document.querySelector("#pagina-resultados .modo-mapa [aria-checked=true]").textContent.includes("Locais")'), 'o modo escolhido deveria continuar após o clique');
   await foto('04b-mapa-municipio-locais');
   // Voltar ao estado.
-  await avaliar('document.querySelector("#pagina-mapa .cartao-topo .botao-secundario").click(); return 1');
-  verificar(await aguardar('!location.hash.includes("mun=") && document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao").length > 500', 15000), 'voltar não levou ao mapa do estado');
+  await avaliar('document.querySelector("#pagina-resultados .cartao-topo .botao-secundario").click(); return 1');
+  verificar(await aguardar('!location.hash.includes("mun=") && document.querySelectorAll("#pagina-resultados .mapa-svg path.mapa-regiao").length > 500', 15000), 'voltar não levou ao mapa do estado');
 });
 
 await caso('Desempenho do mapa: hover em camada única, sem filtros nas áreas, tooltip só visual', async () => {
@@ -394,38 +422,38 @@ await caso('Desempenho do mapa: hover em camada única, sem filtros nas áreas, 
   verificar(r.ms < 150, `200 movimentos do mouse levaram ${r.ms.toFixed(0)} ms`);
 });
 
-await caso('Zoom pela roda do mouse: aproxima no cursor, abre o município sozinho e volta ao afastar', async () => {
+await caso('Zoom pela roda do mouse (página inicial): aproxima no cursor, abre o município sozinho e volta ao afastar', async () => {
   const [id] = candSp;
-  await abrir(`#/mapa?cand=${id}&uf=SP`);
-  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-regiao").length > 600', 15000), 'mapa de SP não carregou');
-  verificar(await avaliar('return document.querySelectorAll("#pagina-mapa .mapa-zoom button").length === 3 && !document.querySelector("#pagina-mapa .mapa-dica").hidden'), 'botões de zoom ou dica ausentes');
+  await abrir(`#/resultados?cand=${id}&uf=SP`);
+  verificar(await aguardar('document.querySelectorAll("#pagina-resultados .mapa-regiao").length > 600', 15000), 'mapa de SP não carregou');
+  verificar(await avaliar('return document.querySelectorAll("#pagina-resultados .mapa-zoom button").length === 3 && !document.querySelector("#pagina-resultados .mapa-dica").hidden'), 'botões de zoom ou dica ausentes');
   // Centro da capital na tela (com o mapa rolado para a vista e a rolagem já parada).
   const ponto = async () => avaliar(`
-    const p = [...document.querySelectorAll('#pagina-mapa .mapa-regiao')].find(a => /^São Paulo\\./.test(a.getAttribute('aria-label')));
+    const p = [...document.querySelectorAll('#pagina-resultados .mapa-regiao')].find(a => /^São Paulo\\./.test(a.getAttribute('aria-label')));
     // Ponto bem dentro da capital: ela mesma também a 8px em todas as direções (longe da divisa).
     const b = p.getBoundingClientRect(), dentro = (x, y) => document.elementFromPoint(x, y) === p;
     for (let y = b.y + 8; y < b.bottom - 8; y += 2) for (let x = b.x + 8; x < b.right - 8; x += 2)
       if ([[0, 0], [8, 0], [-8, 0], [0, 8], [0, -8]].every(([dx, dy]) => dentro(x + dx, y + dy))) return { x, y };
     return { x: b.x + b.width / 2, y: b.y + b.height / 2 };`);
   // Espera o mapa e o painel terminarem de carregar e animar (posições estáveis).
-  await aguardar('document.querySelector("#pagina-mapa .painel-kpis") && !document.getAnimations().some(a => a.playState === "running")', 8000);
-  await avaliar('document.querySelector("#pagina-mapa .mapa-pilha").scrollIntoView({ block: "center" }); return 1');
+  await aguardar('document.querySelector("#pagina-resultados .painel-kpis") && !document.getAnimations().some(a => a.playState === "running")', 8000);
+  await avaliar('document.querySelector("#pagina-resultados .mapa-pilha").scrollIntoView({ block: "center" }); return 1');
   await espera(500);
   const roda = async (deltaY, { x, y }) => cmd('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY });
-  const vb0 = await avaliar('return document.querySelector("#pagina-mapa .mapa-svg").getAttribute("viewBox")');
+  const vb0 = await avaliar('return document.querySelector("#pagina-resultados .mapa-svg").getAttribute("viewBox")');
   const alvo = await ponto();
   // Município que está de fato sob o cursor (o centro da caixa da capital pode cair num vizinho).
   const nomeAlvo = await avaliar(`return document.elementFromPoint(${alvo.x}, ${alvo.y}).getAttribute('aria-label').split('.')[0]`);
   await roda(-120, alvo); await espera(120);
-  verificar(await avaliar(`return document.querySelector("#pagina-mapa .mapa-svg").getAttribute("viewBox") !== ${JSON.stringify(vb0)} && document.querySelector("#pagina-mapa .mapa-pilha").classList.contains("ampliado")`), 'a roda não aproximou o mapa');
-  verificar(await avaliar('const t = document.querySelector("#pagina-mapa .mapa-svg"), m = document.querySelector("#pagina-mapa .mapa-topo"); return t.getAttribute("viewBox") === m.getAttribute("viewBox")'), 'as camadas do mapa ficaram com zoom diferente');
+  verificar(await avaliar(`return document.querySelector("#pagina-resultados .mapa-svg").getAttribute("viewBox") !== ${JSON.stringify(vb0)} && document.querySelector("#pagina-resultados .mapa-pilha").classList.contains("ampliado")`), 'a roda não aproximou o mapa');
+  verificar(await avaliar('const t = document.querySelector("#pagina-resultados .mapa-svg"), m = document.querySelector("#pagina-resultados .mapa-topo"); return t.getAttribute("viewBox") === m.getAttribute("viewBox")'), 'as camadas do mapa ficaram com zoom diferente');
   for (let k = 0; k < 40 && !(await avaliar('return location.hash.includes("mun=")')); k++) { await roda(-240, alvo); await espera(60); }
-  verificar(await aguardar(`location.hash.includes("mun=") && document.querySelector("#pagina-mapa .mapa-pilha-municipio") && document.querySelector("#pagina-mapa .mapa-cartao h2").textContent === ${JSON.stringify(nomeAlvo)}`, 15000), `aproximar não abriu o município sob o cursor (${nomeAlvo})`);
+  verificar(await aguardar(`location.hash.includes("mun=") && document.querySelector("#pagina-resultados .mapa-pilha-municipio") && document.querySelector("#pagina-resultados .mapa-cartao h2").textContent === ${JSON.stringify(nomeAlvo)}`, 15000), `aproximar não abriu o município sob o cursor (${nomeAlvo})`);
   await espera(800);
   // Afastar além do mapa inteiro volta ao estado.
-  const meio = await avaliar('const b = document.querySelector("#pagina-mapa .mapa-pilha").getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }');
+  const meio = await avaliar('const b = document.querySelector("#pagina-resultados .mapa-pilha").getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }');
   for (let k = 0; k < 20 && (await avaliar('return location.hash.includes("mun=")')); k++) { await roda(240, meio); await espera(60); }
-  verificar(await aguardar('!location.hash.includes("mun=") && document.querySelectorAll("#pagina-mapa .mapa-regiao").length > 600', 15000), 'afastar não voltou ao mapa do estado');
+  verificar(await aguardar('!location.hash.includes("mun=") && document.querySelectorAll("#pagina-resultados .mapa-regiao").length > 600', 15000), 'afastar não voltou ao mapa do estado');
 });
 
 await caso('Página inicial: sem botão "Compartilhar", fonte abaixo do mapa e zoom no município', async () => {
@@ -450,6 +478,20 @@ await caso('Página Gráficos foi removida: link antigo abre Resultados e o menu
   verificar(await avaliar('return !document.querySelector("[data-pagina=graficos], #pagina-graficos") && !document.querySelector("#pagina-resultados").hidden'), 'Gráficos ainda existe');
 });
 
+await caso('Typography: 10 combinações de fontes com título, cartão e tabela, sem filtros', async () => {
+  await abrir('#/tipografia');
+  verificar(await aguardar('document.querySelectorAll("#pagina-tipografia .tipo-opcao").length === 10', 8000), 'a página deveria ter 10 opções');
+  verificar(await avaliar('return document.querySelector("#filtros").hidden && document.querySelector("[data-pagina=tipografia][aria-current=page]")?.textContent === "Typography"'), 'filtros visíveis ou menu sem a página');
+  // Cada opção usa as próprias fontes, e elas são baixadas do próprio site.
+  const r = await avaliar(`
+    await document.fonts.ready;
+    const titulos = [...document.querySelectorAll('#pagina-tipografia .tipo-heroi .t-titulo')].map(t => getComputedStyle(t).fontFamily.split(',')[0]);
+    return { distintos: new Set(titulos).size, carregadas: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replace(/"/g, '')) };`);
+  verificar(r.distintos === 10, `as 10 opções deveriam ter fontes de título diferentes (${r.distintos})`);
+  for (const f of ['Playfair Display', 'Oswald', 'Fraunces']) verificar(r.carregadas.includes(f), `fonte ${f} não carregou`);
+  await foto('07-tipografia');
+});
+
 await caso('Tema claro/escuro: alterna, fica salvo e muda a cor do navegador', async () => {
   await abrir(`#/resultados?cand=${candSp[0]}`, { tema: 'escuro' });
   await avaliar('document.querySelector("#tema-botao").click(); return 1');
@@ -462,7 +504,7 @@ await caso('Tema claro/escuro: alterna, fica salvo e muda a cor do navegador', a
 
 // Design: sem rolagem horizontal, contraste de texto e nomes acessíveis, em todas as páginas,
 // nos dois temas e em 4 larguras de tela.
-const PAGINAS = ['#/resultados', `#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`, `#/mapa?cargo=deputado_federal&uf=SP&cand=${candSp[0]}`, '#/mapa?cargo=governador&uf=MG', '#/sobre'];
+const PAGINAS = ['#/resultados', `#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`, `#/mapa?cargo=deputado_federal&uf=SP&cand=${candSp[0]}`, '#/mapa?cargo=governador&uf=MG', '#/sobre', '#/tipografia'];
 const AUDITORIA = `
   const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const rgba = s => { const m = s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p[3] ?? 1]; };
