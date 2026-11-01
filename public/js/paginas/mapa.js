@@ -101,12 +101,13 @@ export function criarPaginaMapa(raiz) {
   const tabela = h('div', { class: 'mapa-tabela' });
   const painel = h('div', { class: 'mapa-painel-conteudo' });
 
-  limpar(raiz, h('div', { class: 'pagina-conteudo' },
-    h('div', { class: 'mapa-layout' },
-      h('section', { class: 'cartao mapa-cartao' },
-        h('div', { class: 'cartao-topo' }, h('div', {}, titulo1, subtitulo), voltar, modoSel),
-        area, ajuda, leg, tabela),
-      h('aside', { class: 'cartao mapa-painel', 'aria-live': 'polite' }, painel))));
+  const lateral = h('aside', { class: 'cartao mapa-painel', 'aria-live': 'polite' }, painel);
+  const layout = h('div', { class: 'mapa-layout' },
+    h('section', { class: 'cartao mapa-cartao' },
+      h('div', { class: 'cartao-topo' }, h('div', {}, titulo1, subtitulo), voltar, modoSel),
+      area, ajuda, leg, tabela),
+    lateral);
+  limpar(raiz, h('div', { class: 'pagina-conteudo' }, layout));
 
   let seq = 0;
   let dePorId = new Map(); // id (UF, município ou local) -> contorno, para desenhar a seleção
@@ -200,8 +201,11 @@ export function criarPaginaMapa(raiz) {
     const unidadeNome = { brasil: 'estado', uf: 'município', municipio: 'local de votação' }[nivel];
     subtitulo.textContent = cand
       ? `Densidade de votos de ${titulo(cand.nome)} por ${unidadeNome} · ${estado.turno}º turno. ${nivel === 'municipio' ? 'Clique em um local.' : `Clique em ${nivel === 'brasil' ? 'um estado' : 'um município para ver os locais de votação'}.`}`
-      : `Busque um candidato no filtro acima para ver onde ele teve mais votos${nivel === 'brasil' ? ', ou clique em um estado' : ''}.`;
-    if (!cand) aviso('Busque um candidato pelo nome ou número no filtro acima para ver, no mapa, onde ele teve a maior parcela dos votos.');
+      : '';
+    // Sem candidato: só o mapa, sem textos repetindo "busque um candidato" e sem o painel lateral.
+    lateral.hidden = !cand;
+    layout.classList.toggle('sem-painel', !cand);
+    if (!cand) limpar(painel);
     else if (nivel === 'brasil' && !cargo.nacional) aviso(`Escolha um estado no mapa para ver os votos de ${titulo(cand.nome)}.`);
     else limpar(painel, esqueleto(4));
     try {
@@ -215,7 +219,7 @@ export function criarPaginaMapa(raiz) {
       const svg = nivel === 'municipio' ? desenharMunicipio(malha, ok ? dens : null) : desenharAreas(nivel, malha, ok ? dens : null);
       if (!svg) return;
       limpar(area, svg);
-      ajuda.hidden = !svg.classList.contains('mapa-pilha');
+      ajuda.hidden = !cand || !svg.classList.contains('mapa-pilha');
       destacarSelecao();
       if (dens?.falha) {
         const e = dens.falha;

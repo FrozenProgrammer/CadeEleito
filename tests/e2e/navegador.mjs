@@ -279,11 +279,12 @@ await caso('Local de votação e seção (AC, capital) aparecem no cartão', asy
   verificar(await aguardar(`document.querySelector(".social-local strong") && /Seção ${localAc.secoes[0]}/.test(document.querySelector(".social-local strong").textContent)`), 'seção não carregou no cartão');
 });
 
-await caso('Mapa sem candidato: mapa neutro, sem legenda, e o painel pede a busca', async () => {
+await caso('Mapa sem candidato: mapa neutro, sem legenda, sem painel lateral nem textos repetidos', async () => {
   await abrir('#/mapa?cargo=governador&uf=MG');
   verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path").length > 100', 12000), 'mapa de MG não carregou');
   verificar(await avaliar('return [...document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao")].every(p => p.classList.contains("mapa-neutro"))'), 'mapa deveria estar neutro');
-  verificar(await avaliar('return !document.querySelector("#pagina-mapa .legenda-densidade") && !!document.querySelector("#pagina-mapa .mapa-painel .aviso")'), 'sem candidato não deve haver legenda; painel deve pedir a busca');
+  verificar(await avaliar('return !document.querySelector("#pagina-mapa .legenda-densidade") && document.querySelector("#pagina-mapa .mapa-painel").hidden && !document.querySelector("#pagina-mapa .mapa-cartao .recorte-sub").textContent && document.querySelector("#pagina-mapa .mapa-dica").hidden'), 'sem candidato: sem legenda, painel escondido e sem textos');
+  verificar(await avaliar('const m = document.querySelector("#pagina-mapa .mapa-cartao").getBoundingClientRect().width, p = document.querySelector("#pagina-mapa .pagina-conteudo").getBoundingClientRect().width; return m > p - 4'), 'sem o painel, o mapa deveria ocupar a largura toda');
 });
 
 await caso('Mapa de densidade (SP): só o candidato filtrado, cor mais forte = maior %, legenda com escala', async () => {
@@ -401,7 +402,11 @@ await caso('Zoom pela roda do mouse: aproxima no cursor, abre o município sozin
   // Centro da capital na tela (com o mapa rolado para a vista e a rolagem já parada).
   const ponto = async () => avaliar(`
     const p = [...document.querySelectorAll('#pagina-mapa .mapa-regiao')].find(a => /^São Paulo\\./.test(a.getAttribute('aria-label')));
-    const b = p.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 };`);
+    // Ponto bem dentro da capital: ela mesma também a 8px em todas as direções (longe da divisa).
+    const b = p.getBoundingClientRect(), dentro = (x, y) => document.elementFromPoint(x, y) === p;
+    for (let y = b.y + 8; y < b.bottom - 8; y += 2) for (let x = b.x + 8; x < b.right - 8; x += 2)
+      if ([[0, 0], [8, 0], [-8, 0], [0, 8], [0, -8]].every(([dx, dy]) => dentro(x + dx, y + dy))) return { x, y };
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };`);
   // Espera o mapa e o painel terminarem de carregar e animar (posições estáveis).
   await aguardar('document.querySelector("#pagina-mapa .painel-kpis") && !document.getAnimations().some(a => a.playState === "running")', 8000);
   await avaliar('document.querySelector("#pagina-mapa .mapa-pilha").scrollIntoView({ block: "center" }); return 1');

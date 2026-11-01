@@ -219,13 +219,8 @@ button, input, select { font: inherit; color: inherit; }
 .titulo-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
 .titulo-logo .lg-f2 { fill: var(--logo-2); }
 .heroi-lema { margin: 12px auto 0; max-width: 640px; color: var(--texto-2); font-family: var(--serifa); font-size: 1.22rem; line-height: 1.4; }
-.heroi-linha {
-  list-style: none; margin: 18px auto 0; padding: 7px 0; max-width: 640px; display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 0;
-  border-top: 1px solid var(--borda-forte); border-bottom: 1px solid var(--borda-forte);
-  font-size: .7rem; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--texto-3);
-}
-.heroi-linha li + li::before { content: "•"; margin: 0 12px; opacity: .6; }
-.heroi-linha abbr { text-decoration: none; }
+/* Sobre: só o título no cabeçalho. */
+body[data-pagina="sobre"] .heroi-lema { display: none; }
 
 /* ---------------------------------------------------------------- layout */
 
@@ -460,6 +455,8 @@ section.cartao { padding: 18px 20px; }
 /* ---------------------------------------------------------------- mapa */
 
 .mapa-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 18px; align-items: start; }
+.mapa-layout.sem-painel { grid-template-columns: minmax(0, 1fr); }
+.recorte-sub:empty { display: none; }
 .mapa-cartao h2 { font-size: 1.6rem; }
 .mapa-area { min-height: 320px; display: grid; place-items: center; }
 .mapa-svg { width: 100%; height: auto; max-height: 640px; display: block; }
@@ -557,8 +554,6 @@ section.cartao { padding: 18px 20px; }
 .sobre h2 { font-size: 2.2rem; font-weight: 700; padding-bottom: 12px; border-bottom: 1px solid var(--borda-forte); }
 .sobre h3 { margin-top: 14px; font-size: 1.35rem; }
 .sobre p, .sobre li, .sobre dd { color: var(--texto-2); font-family: var(--serifa); font-size: 1.12rem; line-height: 1.6; }
-/* Abertura do texto: capitular no primeiro parágrafo. */
-.sobre h2 + p::first-letter { float: left; font-size: 3.4em; line-height: .85; font-weight: 700; padding: 6px 8px 0 0; color: var(--texto); }
 .sobre .recorte-sub { font-family: var(--fonte); font-size: .84rem; }
 .sobre ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .fontes-lista { margin: 0; display: grid; gap: 4px 0; }
@@ -612,8 +607,6 @@ section.cartao { padding: 18px 20px; }
   .combo-item { padding: 10px; }
   .heroi h1 { font-size: 2.4rem; }
   .heroi-lema { font-size: 1.05rem; }
-  .heroi-linha { font-size: .64rem; }
-  .heroi-linha li + li::before { margin: 0 8px; }
   .sobre article { padding: 22px 18px; }
   .sobre h2 { font-size: 1.8rem; }
 }
