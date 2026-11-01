@@ -3,11 +3,13 @@
 // Estado › Município › Zona › Bairro › Local › Seção.
 
 import { h, $, limpar, numero, titulo, situacao, debounce, icone, fotoCandidato } from './dom.js';
+import { cargoDe, situacaoDe, feminino } from './genero.js';
 import { api } from './api.js';
 import { estado, contexto, definir, aoMudar } from './estado.js';
 
 const NOMES_CARGO_CURTO = { deputado_federal: 'Dep. Federal', deputado_estadual: 'Dep. Estadual', deputado_distrital: 'Dep. Distrital' };
-const nomeCargo = id => NOMES_CARGO_CURTO[id] || contexto.config.cargos.find(x => x.id === id)?.nome || '';
+// Nome do cargo concordando com a pessoa (Governadora, Senadora…).
+const nomeCargo = (id, c) => cargoDe(NOMES_CARGO_CURTO[id] || contexto.config.cargos.find(x => x.id === id)?.nome || '', c);
 
 // Candidato do filtro já carregado (o da URL pode ainda estar chegando).
 const candidatoAtual = () => (contexto.candidato && contexto.candidato.id === estado.cand ? contexto.candidato : null);
@@ -79,9 +81,11 @@ function criarBuscaCandidato() {
     contexto.candidato = c;
     entrada.value = '';
     fechar();
-    // Novo candidato começa no recorte dele: o estado (ou o Brasil, para Presidente), 1º turno.
-    const alt = { cand: c.id, cargo: c.cargo, uf: c.uf === 'BR' ? '' : c.uf, turno: '1' };
-    definir(alt);
+    // Troca de candidato no mesmo estado (ou para Presidente, que vale em qualquer recorte): os
+    // filtros ficam (estado, município, zona… e o turno, se ele disputou) e só os números mudam.
+    // De outro estado: começa no recorte dele, o estado (ou o Brasil), 1º turno.
+    const mesmoEstado = c.uf === 'BR' || c.uf === estado.uf;
+    definir(mesmoEstado ? { cand: c.id, cargo: c.cargo } : { cand: c.id, cargo: c.cargo, uf: c.uf === 'BR' ? '' : c.uf, turno: '1' });
   };
   const marcar = i => {
     ativo = i;
@@ -100,7 +104,7 @@ function criarBuscaCandidato() {
         h('span', { class: 'combo-num', text: c.numero }),
         h('span', { class: 'combo-texto' },
           h('strong', { text: titulo(c.nome) }),
-          h('small', { text: `${c.partido} · ${nomeCargo(c.cargo)} · ${c.uf}${c.situacao ? ` · ${situacao(c.situacao)}` : ''}` })),
+          h('small', { text: `${c.partido} · ${nomeCargo(c.cargo, c)} · ${c.uf}${c.situacao ? ` · ${situacaoDe(situacao(c.situacao), c)}` : ''}` })),
       )) : [h('li', { class: 'combo-vazio', text: 'Nenhum candidato encontrado.' })]);
       lista.hidden = false;
       entrada.setAttribute('aria-expanded', 'true');
@@ -128,7 +132,7 @@ function criarBuscaCandidato() {
     limpar(chip,
       fotoCandidato(c, 'cand-chip-foto'),
       h('span', { class: 'cand-chip-num', text: c.numero }),
-      h('span', { class: 'cand-chip-texto' }, h('strong', { text: titulo(c.nome) }), h('small', { text: `${c.partido} · ${nomeCargo(c.cargo)} · ${c.uf}` })),
+      h('span', { class: 'cand-chip-texto' }, h('strong', { text: titulo(c.nome) }), h('small', { text: `${c.partido} · ${nomeCargo(c.cargo, c)} · ${c.uf}` })),
       h('button', { type: 'button', class: 'botao-icone', 'aria-label': 'Remover candidato do filtro', title: 'Remover candidato', onclick: limparTudo }, icone('fechar')));
   };
 
@@ -204,7 +208,7 @@ export function criarFiltros(container) {
     // Turno
     limpar(turnos, ['1', '2'].map(t => {
       const disp = turnoDisponivel(estado.cargo, t);
-      return h('button', { type: 'button', role: 'radio', class: 'segmento', 'aria-checked': String(estado.turno === t), disabled: !disp || undefined, title: disp ? '' : 'O candidato não disputou o 2º turno', onclick: () => definir({ turno: t }) }, `${t}º`);
+      return h('button', { type: 'button', role: 'radio', class: 'segmento', 'aria-checked': String(estado.turno === t), disabled: !disp || undefined, title: disp ? '' : `${feminino(c) ? 'A candidata' : 'O candidato'} não disputou o 2º turno`, onclick: () => definir({ turno: t }) }, `${t}º`);
     }));
     // Estado: candidato estadual só existe no seu estado (o campo fica fixo); Presidente, em todos.
     const fixo = c && c.uf !== 'BR';

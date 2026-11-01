@@ -273,8 +273,8 @@ async function main() {
     comFoto++;
   }
   console.log(`  fotos: ${comFoto} de ${lista.length} candidatos.`);
-  // Campo 9: 1 = há foto em img/c/{id}.jpg.
-  gravar('candidatos.bin', { cargos: cargosIdx, lista: lista.map(c => [c.id, c.nome, c.nomeCompleto, c.numero, cargosIdx.indexOf(c.cargo), c.uf, c.partido, c.situacao, c.turno2 ? 1 : 0, temFoto.has(c.id) ? 1 : 0]) });
+  // Campo 9: 1 = há foto em img/c/{id}.jpg. Campo 10: gênero declarado ('F', 'M' ou '').
+  gravar('candidatos.bin', { cargos: cargosIdx, lista: lista.map(c => [c.id, c.nome, c.nomeCompleto, c.numero, cargosIdx.indexOf(c.cargo), c.uf, c.partido, c.situacao, c.turno2 ? 1 : 0, temFoto.has(c.id) ? 1 : 0, c.genero || '']) });
 
   // 7. Índice.
   gravar('indice.bin', {

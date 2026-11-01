@@ -195,8 +195,8 @@ let candidatosCache = null;
 async function listaCandidatos() {
   if (candidatosCache) return candidatosCache;
   const d = await carregar('candidatos.bin');
-  candidatosCache = d.lista.map(([id, nome, nomeCompleto, numero, ci, uf, partido, situacao, turno2, foto]) => ({
-    c: { id, nome, nomeCompleto, numero, cargo: d.cargos[ci], uf, partido, situacao, turno2: !!turno2, foto: !!foto },
+  candidatosCache = d.lista.map(([id, nome, nomeCompleto, numero, ci, uf, partido, situacao, turno2, foto, genero = '']) => ({
+    c: { id, nome, nomeCompleto, numero, cargo: d.cargos[ci], uf, partido, situacao, turno2: !!turno2, foto: !!foto, genero },
     k: `${normalizar(nome)} | ${normalizar(nomeCompleto)} | ${numero}`,
   }));
   return candidatosCache;
@@ -256,7 +256,7 @@ async function vencedores(p) {
   }
   const candidato = numero => {
     const c = porNumero.get(numero);
-    return { numero, id: c?.id || '', nome: c?.nome || `Número ${numero}`, partido: c?.partido || '', foto: !!c?.foto };
+    return { numero, id: c?.id || '', nome: c?.nome || `Número ${numero}`, partido: c?.partido || '', foto: !!c?.foto, genero: c?.genero || '' };
   };
   const areas = {};
   for (const [id, ranking] of porArea) {

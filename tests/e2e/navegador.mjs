@@ -234,6 +234,45 @@ await caso('Cartão do candidato: números coerentes, selo, local da pesquisa e 
   await foto('02-cartao-candidato');
 });
 
+await caso('Gênero: textos concordam com a pessoa (Erika Hilton: Deputada Federal, Eleita; homem: Eleito)', async () => {
+  await abrir('#/resultados');
+  // Gênero declarado no TSE (DS_GENERO): Erika Hilton, mulher trans, está registrada como FEMININO.
+  const ids = await avaliar(`const { api } = await import('./js/api.js');
+    const ela = (await api('/api/candidatos', { q: 'erika hilton' })).find(c => c.cargo === 'deputado_federal');
+    const ele = (await api('/api/candidatos', { q: 'tarcisio' })).find(c => c.cargo === 'governador' && /^ELEITO/.test(c.situacao));
+    return { ela: ela && [ela.id, ela.uf, ela.genero], ele: ele && [ele.id, ele.uf, ele.genero] };`);
+  verificar(ids.ela?.[2] === 'F' && ids.ele?.[2] === 'M', `gênero ausente nos dados: ${JSON.stringify(ids)}`);
+  await abrir(`#/resultados?cand=${ids.ela[0]}&uf=${ids.ela[1]}`);
+  verificar(await aguardar('document.querySelector(".cartao-social .destaque-sobre")', 12000), 'cartão da candidata não apareceu');
+  const ela = await avaliar('return { sobre: document.querySelector(".destaque-sobre").textContent, selo: document.querySelector(".selo-eleito")?.textContent || "", sit: document.querySelector(".social-nome p")?.textContent || "", chip: document.querySelector(".cand-chip small").textContent }');
+  verificar(/Deputada Federal/.test(ela.sobre) && ela.selo === 'Eleita' && /^Eleita/.test(ela.sit) && !/Eleito/.test(ela.sit), `textos da candidata: ${JSON.stringify(ela)}`);
+  await abrir(`#/resultados?cand=${ids.ele[0]}&uf=${ids.ele[1]}`);
+  verificar(await aguardar('document.querySelector(".cartao-social .destaque-sobre")', 12000), 'cartão do candidato não apareceu');
+  const ele = await avaliar('return { sobre: document.querySelector(".destaque-sobre").textContent, selo: document.querySelector(".selo-eleito")?.textContent || "" }');
+  verificar(/Governador\b/.test(ele.sobre) && !/Governadora/.test(ele.sobre) && ele.selo === 'Eleito', `textos do candidato: ${JSON.stringify(ele)}`);
+});
+
+await caso('Troca de candidato: mesmo estado mantém os filtros; outro estado recomeça no estado dele', async () => {
+  // Busca pelo nome e escolhe a sugestão com o número e a UF esperados.
+  const trocarPara = async ([, nome, , num, , uf]) => {
+    await avaliar(`const e = document.querySelector('#cand-busca'); e.focus(); e.value = ${JSON.stringify(nome.toLowerCase())}; e.dispatchEvent(new Event('input')); return 1`);
+    const alvo = `[...document.querySelectorAll("#cand-lista .combo-item")].find(li => li.querySelector(".combo-num").textContent === ${JSON.stringify(num)} && li.querySelector("small").textContent.includes(" · ${uf}"))`;
+    verificar(await aguardar(alvo), `sugestão de ${nome} (${uf}) não apareceu`);
+    await avaliar(`${alvo}.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return 1`);
+  };
+  await abrir(`#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`);
+  verificar(await aguardar('document.querySelector(".cartao-social")'), 'cartão não apareceu');
+  const outroSp = depSp.find(c => c[0] !== candSp[0] && c[1] !== candSp[1]);
+  await trocarPara(outroSp);
+  verificar(await aguardar(`location.hash.includes("cand=${outroSp[0]}")`), 'candidato não foi trocado');
+  verificar(await avaliar(`return location.hash.includes("uf=SP") && location.hash.includes("mun=${capitalSp.cd}")`), `mesmo estado deveria manter os filtros: ${await avaliar('return location.hash')}`);
+  verificar(await aguardar(`document.querySelector(".social-local strong")?.textContent.includes("São Paulo › ")`), 'cartão deveria continuar no município');
+  const doRj = [...depRj.values()][0];
+  await trocarPara(doRj);
+  verificar(await aguardar(`location.hash.includes("cand=${doRj[0]}")`), 'candidato do RJ não foi escolhido');
+  verificar(await avaliar('return location.hash.includes("uf=RJ") && !location.hash.includes("mun=")'), `outro estado deveria recomeçar no estado dele: ${await avaliar('return location.hash')}`);
+});
+
 await caso('Candidato estadual fica no seu estado (link editado com outra UF volta para a UF dele)', async () => {
   const [id, nome] = candSp;
   await abrir(`#/resultados?cargo=deputado_federal&uf=RJ&cand=${id}`);
@@ -289,8 +328,15 @@ await caso('Mapa sem candidato: Brasil sem painel; no estado, atalhos de cargo, 
   verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao").length === 27', 12000), 'mapa do Brasil não carregou');
   verificar(await avaliar('return !document.querySelector("#pagina-mapa .legenda-densidade") && document.querySelector("#pagina-mapa .mapa-painel").hidden && !document.querySelector("#pagina-mapa .mapa-cartao .recorte-sub").textContent && document.querySelector("#pagina-mapa .mapa-dica").hidden'), 'Brasil sem candidato: sem legenda, painel escondido e sem textos');
   verificar(await avaliar('const m = document.querySelector("#pagina-mapa .mapa-cartao").getBoundingClientRect().width, p = document.querySelector("#pagina-mapa .pagina-conteudo").getBoundingClientRect().width; return m > p - 4'), 'sem o painel, o mapa deveria ocupar a largura toda');
-  await abrir('#/mapa?uf=SP');
+  // Aba Mapa: sem o subtítulo do herói; abaixo da busca, os passos de como usar o mapa.
+  verificar(await avaliar('return getComputedStyle(document.querySelector(".heroi-lema")).display === "none"'), 'o subtítulo do herói não deveria aparecer na aba Mapa');
+  verificar(await avaliar('const g = document.querySelector("#pagina-mapa .mapa-guia"); return !!g && !g.hidden && g.querySelectorAll("li").length === 4 && g.getBoundingClientRect().top >= document.querySelector("#filtros").getBoundingClientRect().bottom'), 'guia de uso deveria aparecer abaixo da busca');
+  // Clicar num estado mostra o indicador de carregamento (do tamanho do mapa) até o mapa chegar.
+  await avaliar(`window.__carregou = null; new MutationObserver(() => { const c = document.querySelector('#pagina-mapa .mapa-carregando'); if (c && !window.__carregou) window.__carregou = { altura: c.getBoundingClientRect().height, texto: c.textContent }; }).observe(document.querySelector('#pagina-mapa'), { childList: true, subtree: true }); return 1`);
+  await avaliar('const p = [...document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao")].find(a => /^São Paulo/.test(a.getAttribute("aria-label"))); p.dispatchEvent(new MouseEvent("click", { bubbles: true })); return 1');
   verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao").length > 600 && document.querySelectorAll("#pagina-mapa .chip-cargo").length >= 4', 15000), 'estado sem os atalhos de cargo');
+  const carregou = await avaliar('return window.__carregou');
+  verificar(carregou && carregou.altura >= 200 && /Carregando o mapa de São Paulo/.test(carregou.texto), `indicador de carregamento ausente ou encolhido: ${JSON.stringify(carregou)}`);
   verificar(await avaliar('return [...document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao")].every(p => p.classList.contains("mapa-neutro")) && !document.querySelector("#pagina-mapa .mapa-painel").hidden'), 'antes de escolher o cargo o mapa fica neutro, com o painel visível');
   await avaliar('[...document.querySelectorAll("#pagina-mapa .chip-cargo")].find(b => b.textContent === "Governador").click(); return 1');
   verificar(await aguardar('document.querySelector("#pagina-mapa .legenda-partidos li") && document.querySelectorAll("#pagina-mapa .mapa-svg path[class*=dens-]").length > 600', 15000), 'Governador não coloriu o mapa');
@@ -319,6 +365,7 @@ await caso('Mapa de densidade (SP): só o candidato filtrado, cor mais forte = m
   const [id] = candSp;
   await abrir(`#/mapa?cargo=deputado_federal&uf=SP&cand=${id}`);
   verificar(await aguardar('document.querySelector("#pagina-mapa .legenda-densidade") && document.querySelector("#pagina-mapa .mapa-painel .painel-kpis")', 15000), 'mapa de densidade/legenda não carregou');
+  verificar(await avaliar('return document.querySelector("#pagina-mapa .mapa-guia").hidden'), 'com candidato, o guia de uso não deveria aparecer');
   verificar(await avaliar('return document.querySelectorAll("#pagina-mapa .legenda-degraus span").length === 9 && document.querySelectorAll("#pagina-mapa .legenda-marcas span").length === 3'), 'legenda sem os 9 degraus e as marcas de %');
   // A área de maior % (1ª linha da tabela, ordenada) tem o degrau mais forte; nenhuma área com votos fica sem cor.
   const r = await avaliar(`

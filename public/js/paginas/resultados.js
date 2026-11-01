@@ -6,10 +6,11 @@ import { estado, urlPara } from '../estado.js';
 import { acoesCompartilhar } from '../compartilhar.js';
 import { criarCarregador, rodapeFonte, candidatoDoFiltro, partesRecorte } from './comum.js';
 import { criarPaginaMapa } from './mapa.js';
+import { feminino, cargoDe, eleitoDe, situacaoDe } from '../genero.js';
 
 // Situação do TSE: "Eleito", "Eleito por QP", "Eleito por média" (nunca "Não eleito"/"Suplente").
 const eleito = s => /^eleit/i.test(s || '');
-const selo = () => h('span', { class: 'selo-eleito', text: 'Eleito' });
+const selo = c => h('span', { class: 'selo-eleito', text: eleitoDe(c) }); // Eleito / Eleita
 
 // Logo "lupa no mapa" (o mesmo do título), para o cartão sair com a marca no print.
 const logo = () => h('svg:svg', { class: 'social-logo', viewBox: '0 0 64 64', 'aria-hidden': 'true' },
@@ -22,13 +23,15 @@ function metrica(valor, rotulo) {
 }
 
 // Cartão do candidato no recorte. Sem votos no recorte, mostra zero (também é informação).
+// Os textos concordam com o gênero da pessoa (Deputada, Eleita…: ver js/genero.js).
 function cartaoCandidato(c, d) {
+  const cargo = cargoDe(d.cargo.nome, c);
   const linha = d.candidatos.find(x => x.numero === c.numero);
   const lider = d.candidatos[0];
   const local = partesRecorte(d.escopo).join(' › ');
   const sit = linha?.situacao || c.situacao || '';
   const info = {
-    nome: titulo(c.nome), numero: c.numero, partido: c.partido, cargo: d.cargo.nome, uf: c.uf, situacao: sit, eleito: eleito(sit),
+    nome: titulo(c.nome), numero: c.numero, partido: c.partido, cargo, uf: c.uf, situacao: sit, eleito: eleito(sit), eleitoTexto: eleitoDe(c).toUpperCase(),
     local, votos: linha?.votos || 0, percentual: linha?.percentual || 0, posicao: linha?.posicao || 0, total: d.candidatos.length, turno: d.turno,
     url: new URL(urlPara('resultados'), location.href).href, foto: urlFoto(c),
   };
@@ -40,9 +43,9 @@ function cartaoCandidato(c, d) {
     h('div', { class: 'social-cand' },
       h('div', { class: 'destaque-num', text: c.numero }),
       h('div', { class: 'social-nome' },
-        h('span', { class: 'destaque-sobre', text: [c.partido, d.cargo.nome, c.uf !== 'BR' ? c.uf : ''].filter(Boolean).join(' · ') }),
-        h('h3', {}, info.nome, info.eleito ? selo() : null),
-        sit ? h('p', { text: situacao(sit) }) : null),
+        h('span', { class: 'destaque-sobre', text: [c.partido, cargo, c.uf !== 'BR' ? c.uf : ''].filter(Boolean).join(' · ') }),
+        h('h3', {}, info.nome, info.eleito ? selo(c) : null),
+        sit ? h('p', { text: situacaoDe(situacao(sit), c) }) : null),
       fotoCandidato(c, 'social-foto')),
     h('div', { class: 'social-local' }, icone('mapa'),
       h('div', {}, h('span', { class: 'social-rotulo', text: 'Onde' }), h('strong', { text: local }),
@@ -51,7 +54,7 @@ function cartaoCandidato(c, d) {
       metrica(numero(info.votos), 'votos'),
       metrica(pct(info.percentual), 'dos votos válidos'),
       metrica(linha ? `${linha.posicao}º` : '—', `de ${numero(d.candidatos.length)} candidatos`),
-      linha ? (dif !== null ? metrica(numero(dif), `votos atrás de ${titulo(lider.nome)}`) : metrica('1º', 'mais votado aqui')) : null),
+      linha ? (dif !== null ? metrica(numero(dif), `votos atrás de ${titulo(lider.nome)}`) : metrica('1º', feminino(c) ? 'mais votada aqui' : 'mais votado aqui')) : null),
     h('p', { class: 'social-fonte', text: 'Dados oficiais do TSE' }));
   return [cartao, acoesCompartilhar(info)];
 }

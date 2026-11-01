@@ -107,10 +107,11 @@ export async function desenharImagem(i) {
   g.fillStyle = '#ffffff'; g.fillText(i.numero, M + 28, y + 68);
   if (i.eleito) {
     g.font = fonte(800, 26);
-    const w = g.measureText('ELEITO').width + 40;
+    const selo = i.eleitoTexto || 'ELEITO'; // ELEITO / ELEITA
+    const w = g.measureText(selo).width + 40;
     g.fillStyle = 'rgba(34,197,94,.22)'; retangulo(g, M + largNum + 20, y + 26, w, 46, 23); g.fill();
     g.strokeStyle = 'rgba(110,231,160,.6)'; g.lineWidth = 2; g.stroke();
-    g.fillStyle = '#6ee7a0'; g.fillText('ELEITO', M + largNum + 40, y + 59);
+    g.fillStyle = '#6ee7a0'; g.fillText(selo, M + largNum + 40, y + 59);
   }
   y += 170;
   g.fillStyle = '#ffffff'; g.font = serifa(600, 70);

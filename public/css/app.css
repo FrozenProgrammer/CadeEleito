@@ -267,7 +267,7 @@ body[data-pagina="resultados"] .filtros.filtros-so-busca { transform: translateY
 @keyframes planar { 50% { transform: translate(14px, -6px); } }
 
 /* Sobre: só o título no cabeçalho. */
-body[data-pagina="sobre"] .heroi-lema { display: none; }
+body[data-pagina="sobre"] .heroi-lema, body[data-pagina="mapa"] .heroi-lema { display: none; }
 
 /* ---------------------------------------------------------------- layout */
 
@@ -534,6 +534,19 @@ section.cartao { padding: 18px 20px; }
 .recorte-sub:empty { display: none; }
 .mapa-cartao h2 { font-size: 1.55rem; }
 .mapa-area { min-height: 320px; display: grid; place-items: center; }
+/* Carregando o mapa: ocupa a área toda, com um anel girando e o nome do lugar. */
+.mapa-carregando {
+  width: 100%; min-height: 420px; display: grid; place-content: center; justify-items: center; gap: 14px;
+  color: var(--texto-3); font-size: .9rem; border-radius: var(--raio-p);
+  background: repeating-linear-gradient(135deg, transparent 0 14px, var(--vidro) 14px 15px);
+}
+.mapa-carregando-giro {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 3px solid var(--borda-forte); border-top-color: var(--acento-texto);
+  animation: girar .8s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (max-width: 640px) { .mapa-carregando { min-height: 260px; } }
 .mapa-svg { width: 100%; height: auto; max-height: 640px; display: block; }
 /* Pilha: o mapa colorido numa camada própria (pintada uma vez) e o destaque num SVG por cima,
    do mesmo tamanho e viewBox. Passar o mouse só repinta a camada de cima. */
@@ -557,6 +570,10 @@ section.cartao { padding: 18px 20px; }
 .mapa-zoom-botao:hover:not(:disabled) { background: var(--superficie-3); }
 .mapa-zoom-botao:disabled { color: var(--texto-3); cursor: default; }
 .mapa-dica { font-size: .78rem; color: var(--texto-3); margin-top: 6px; }
+/* Aba Mapa sem candidato: como usar o mapa, em uma linha de passos curtos logo abaixo da busca. */
+.mapa-guia { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 8px 22px; margin: 0; padding: 0 4px; list-style: none; font-size: .86rem; line-height: 1.4; color: var(--texto-2); }
+.mapa-guia li { display: flex; align-items: baseline; gap: 8px; }
+.mapa-guia b { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--acento-fundo); color: var(--acento-texto); font-size: .72rem; font-variant-numeric: tabular-nums; }
 /* Desempenho: as áreas não têm hover, filtro nem transição próprios (são centenas ou milhares).
    O destaque é uma camada única por cima (.mapa-hover) e a seleção outra (.mapa-selecao). */
 .mapa-regiao { stroke: var(--superficie); stroke-width: .7; vector-effect: non-scaling-stroke; cursor: pointer; }
