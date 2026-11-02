@@ -1,10 +1,14 @@
 // Página "Resultados" (inicial): busca do candidato, cartão com os números dele no recorte
 // escolhido nos filtros (pronto para compartilhar nas redes) e, abaixo, o mapa de densidade.
+// Comparação (2º candidato nos filtros): dois cartões lado a lado. No mesmo estado, os dois no
+// mesmo recorte; em estados diferentes, o do foco no recorte e o outro com o total do estado dele.
 
 import { h, limpar, numero, pct, titulo, situacao, icone, fotoCandidato, urlFoto } from '../dom.js';
-import { estado, urlPara } from '../estado.js';
+import { estado, contexto, urlPara, consultaAtual } from '../estado.js';
+import { api } from '../api.js';
 import { acoesCompartilhar } from '../compartilhar.js';
-import { criarCarregador, rodapeFonte, candidatoDoFiltro, partesRecorte } from './comum.js';
+import { rodapeFonte, candidatoDoFiltro, partesRecorte, esqueleto, erro, informacao } from './comum.js';
+import { candidatoA, candidatoB, candidatoPrincipal, compativeis, coresDuelo } from '../comparacao.js';
 import { criarPaginaMapa } from './mapa.js';
 import { feminino, cargoDe, eleitoDe, situacaoDe } from '../genero.js';
 
@@ -59,18 +63,68 @@ function cartaoCandidato(c, d) {
   return [cartao, acoesCompartilhar(info)];
 }
 
+// Linha de resumo do duelo (mesmo cargo e mesmo recorte: votos comparáveis).
+function resumoDuelo([a, b], [da, db]) {
+  const va = da.candidatos.find(x => x.numero === a.numero)?.votos || 0;
+  const vb = db.candidatos.find(x => x.numero === b.numero)?.votos || 0;
+  const local = partesRecorte(da.escopo).join(' › ');
+  if (va === vb) return h('p', { class: 'comparacao-resumo', text: `Empate em ${local}: ${numero(va)} votos para cada um.` });
+  const [lider, outro, dif] = va > vb ? [a, b, va - vb] : [b, a, vb - va];
+  return h('p', { class: 'comparacao-resumo' }, h('strong', { text: titulo(lider.nome) }), ` teve ${numero(dif)} ${dif === 1 ? 'voto' : 'votos'} a mais que ${titulo(outro.nome)} em ${local}.`);
+}
+
 export function criarPaginaResultados(raiz) {
   const conteudo = h('div', { class: 'pagina-conteudo' });
   const areaMapa = h('div', { class: 'resultados-mapa', hidden: true });
   const fonte = h('div', { class: 'resultados-fonte' });
   limpar(raiz, conteudo, areaMapa, fonte);
   const mapa = criarPaginaMapa(areaMapa);
-  const carregar = criarCarregador(conteudo, d => {
-    const c = candidatoDoFiltro(d);
-    limpar(conteudo, c ? cartaoCandidato(c, d) : null);
+
+  // Um só carregador para um ou dois cartões (respostas antigas são descartadas pelo seq).
+  let seq = 0;
+  const falha = (e, deNovo) => (e.status === 400 || e.status === 404 ? informacao(e.message) : erro(e.message, deNovo));
+  async function carregar() {
+    const minha = ++seq;
+    const cargo = contexto.config.cargos.find(c => c.id === estado.cargo);
+    const a = candidatoA(), b = candidatoB();
+    if (!cargo || !a) { limpar(conteudo); limpar(fonte); return; }
+    if (!estado.uf && !cargo.nacional) {
+      limpar(conteudo, informacao(`Os resultados de ${cargo.nome} são por estado. Selecione o estado no filtro acima.`));
+      return;
+    }
+    const duelo = compativeis(a, b);
+    const p = candidatoPrincipal();
+    // Estados diferentes: o candidato fora do foco aparece com o total do estado dele.
+    const consulta = c => (!b || duelo || c === p ? consultaAtual({ cargo: c.cargo }) : { turno: estado.turno, cargo: c.cargo, uf: c.uf === 'BR' ? '' : c.uf });
+    const lista = b ? [a, b] : [a];
+    // Só mostra o esqueleto se a resposta demorar (evita piscar em respostas instantâneas).
+    const espera = setTimeout(() => { if (minha === seq) limpar(conteudo, esqueleto()); }, 150);
+    const res = await Promise.allSettled(lista.map(c => api('/api/resultado', consulta(c))));
+    clearTimeout(espera);
+    if (minha !== seq) return;
+    const ok = res.map(r => (r.status === 'fulfilled' ? r.value : null));
     // A fonte dos dados fica abaixo do mapa.
-    limpar(fonte, c ? rodapeFonte(d) : null);
-  });
+    limpar(fonte, ok.find(Boolean) ? rodapeFonte(ok.find(Boolean)) : null);
+    if (!b) {
+      if (!ok[0]) return limpar(conteudo, falha(res[0].reason, carregar));
+      const c = candidatoDoFiltro(ok[0]);
+      return limpar(conteudo, c ? cartaoCandidato(c, ok[0]) : null);
+    }
+    const cores = coresDuelo(a, b);
+    const itens = lista.map((c, i) => {
+      const item = h('div', { class: 'comparacao-item' }, ok[i] ? cartaoCandidato(c, ok[i]) : falha(res[i].reason, carregar));
+      item.style.setProperty('--lado', cores[i]);
+      return item;
+    });
+    // Estados diferentes: uma nota só, acima dos dois cartões (eles continuam alinhados).
+    const fora = duelo ? null : lista.find(c => c !== p);
+    limpar(conteudo,
+      fora ? h('p', { class: 'comparacao-nota' }, icone('info'),
+        h('span', { text: `${titulo(fora.nome)} é de outro estado: o cartão mostra o total do estado (${fora.uf}). Os filtros seguem ${titulo(p.nome)}; para ver ${titulo(fora.nome)} por município, use "Mapa de" no mapa abaixo.` })) : null,
+      h('div', { class: 'comparacao', role: 'group', 'aria-label': `Comparação entre ${titulo(a.nome)} e ${titulo(b.nome)}` }, itens),
+      duelo && a.cargo === b.cargo && ok[0] && ok[1] ? resumoDuelo(lista, ok) : null);
+  }
+
   return {
     carregar() {
       // Sem candidato: a página é só a busca (o cartão e o mapa aparecem depois de escolher).

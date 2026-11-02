@@ -152,6 +152,17 @@ const capitalSp = ler('uf/SP.bin').municipios.find(m => m.capital);
 const govAc = candidatos.find(c => cargosIdx[c[4]] === 'governador' && c[5] === 'AC');
 const locaisAc = ler(`m/AC/${ac.cd}.bin`).locais;
 const localAc = locaisAc[0];
+// Comparação: outro deputado federal eleito de SP e um do RJ.
+const outroSp = depSp.find(c => c[0] !== candSp[0] && c[1] !== candSp[1] && /^ELEITO/.test(c[7])) || depSp.find(c => c[0] !== candSp[0]);
+const doRj = [...depRj.values()].find(c => /^ELEITO/.test(c[7])) || [...depRj.values()][0];
+
+// Digita o nome numa busca (prefixo "cand" ou "cand2") e escolhe a sugestão com o número e a UF esperados.
+async function buscarEscolher(prefixo, [, nome, , num, , uf]) {
+  await avaliar(`const e = document.querySelector('#${prefixo}-busca'); e.focus(); e.value = ${JSON.stringify(nome.toLowerCase())}; e.dispatchEvent(new Event('input')); return 1`);
+  const alvo = `[...document.querySelectorAll("#${prefixo}-lista .combo-item")].find(li => li.querySelector(".combo-num").textContent === ${JSON.stringify(num)} && li.querySelector("small").textContent.includes(" · ${uf}"))`;
+  verificar(await aguardar(alvo), `sugestão de ${nome} (${uf}) não apareceu`);
+  await avaliar(`${alvo}.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); return 1`);
+}
 
 // ---------------------------------------------------------------------------
 // Cenários.
@@ -511,6 +522,81 @@ await caso('Página inicial: sem botão "Compartilhar", fonte abaixo do mapa e z
   verificar(await avaliar('const m = document.querySelector("#pagina-resultados .resultados-mapa"), f = document.querySelector("#pagina-resultados .resultados-fonte"); return m.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING && f.getBoundingClientRect().top >= m.getBoundingClientRect().bottom - 1'), 'a fonte deveria ficar abaixo do mapa');
 });
 
+await caso('Comparação no mesmo estado: 2º candidato mantém os filtros, cartões lado a lado e mapa do duelo', async () => {
+  await abrir(`#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`);
+  verificar(await aguardar('document.querySelector(".cartao-social")'), 'cartão não apareceu');
+  verificar(await avaliar('return !document.querySelector(".filtros-comparar").hidden && !document.querySelector(".botao-comparar").hidden && document.querySelector("#cand2-busca").closest(".combo").hidden'), 'botão "Comparar" deveria aparecer (e a 2ª busca, não)');
+  await avaliar('document.querySelector(".botao-comparar").click(); return 1');
+  verificar(await avaliar('return !document.querySelector("#cand2-busca").closest(".combo").hidden && document.activeElement.id === "cand2-busca"'), '2ª busca deveria abrir com foco');
+  await buscarEscolher('cand2', outroSp);
+  verificar(await aguardar(`location.hash.includes("cand2=${outroSp[0]}")`), 'o 2º candidato não entrou na URL');
+  verificar(await avaliar(`return location.hash.includes("cand=${candSp[0]}") && location.hash.includes("mun=${capitalSp.cd}")`), `mesmo estado: os filtros deveriam ficar: ${await avaliar('return location.hash')}`);
+  verificar(await aguardar('document.querySelectorAll(".comparacao .cartao-social").length === 2', 12000), 'deveriam aparecer dois cartões');
+  const nomes = await avaliar('return [...document.querySelectorAll(".comparacao .cartao-social h3")].map(h => h.firstChild.textContent.toLowerCase())');
+  verificar(nomes[0] === candSp[1].toLowerCase() && nomes[1] === outroSp[1].toLowerCase(), `cartões fora de ordem: ${nomes}`);
+  verificar(await avaliar('const [a, b] = [...document.querySelectorAll(".comparacao-item")].map(e => e.getBoundingClientRect()); return Math.abs(a.top - b.top) < 2 && b.left > a.right'), 'cartões deveriam ficar lado a lado');
+  verificar(await avaliar('return [...document.querySelectorAll(".comparacao .social-local strong")].every(s => /São Paulo › /.test(s.textContent))'), 'os dois cartões deveriam estar no município');
+  verificar(await avaliar('return /a mais que/.test(document.querySelector(".comparacao-resumo")?.textContent || "") || /Empate/.test(document.querySelector(".comparacao-resumo")?.textContent || "")'), 'resumo do duelo ausente');
+  // Mapa do duelo: legenda com as duas escalas, áreas nas duas cores e painel com os dois.
+  verificar(await aguardar('document.querySelector("#pagina-resultados .legenda-duelo")', 20000), 'legenda do duelo não apareceu');
+  const m = await avaliar(`const cores = [...document.querySelectorAll('#pagina-resultados .legenda-duelo-linha')].slice(0, 2).map(l => l.style.getPropertyValue('--partido'));
+    const usadas = new Set([...document.querySelectorAll('#pagina-resultados .mapa-celula')].map(p => p.style.getPropertyValue('--partido')).filter(Boolean));
+    return { cores, usadas: [...usadas], painel: document.querySelector('#pagina-resultados .mapa-painel').innerText, chips: [...document.querySelectorAll('.cand-chip.com-cor')].map(c => c.style.getPropertyValue('--lado')) };`);
+  verificar(m.cores.length === 2 && m.cores[0] !== m.cores[1], `as duas escalas deveriam ter cores diferentes: ${m.cores}`);
+  verificar(m.usadas.every(c => m.cores.includes(c)), `áreas com cor fora do duelo: ${m.usadas}`);
+  verificar(m.chips.join() === m.cores.join(), `chips deveriam ter as cores do mapa: ${m.chips} × ${m.cores}`);
+  verificar(/×/.test(m.painel) && /ficou à frente em/.test(m.painel), `painel do duelo: ${m.painel.slice(0, 200)}`);
+  // Nota da escala muda com o tema (sem redesenhar o mapa).
+  const nota = () => avaliar('return [...document.querySelectorAll("#pagina-resultados .legenda-duelo .legenda-nota span")].filter(s => getComputedStyle(s).display !== "none").map(s => s.textContent).join()');
+  verificar(/mais claro/.test(await nota()), 'no tema escuro a nota deveria dizer "tom mais claro"');
+  await avaliar('document.documentElement.dataset.tema = "claro"; return 1');
+  verificar(/mais escuro/.test(await nota()), 'no tema claro a nota deveria dizer "tom mais escuro"');
+  await avaliar('delete document.documentElement.dataset.tema; return 1');
+  await foto('17-comparacao');
+  // Tirar o 2º: volta a um cartão, filtros mantidos.
+  await avaliar('document.querySelector(".filtros-comparar .cand-chip .botao-icone").click(); return 1');
+  verificar(await aguardar(`!location.hash.includes("cand2=") && location.hash.includes("mun=${capitalSp.cd}")`), `remover o 2º deveria manter os filtros: ${await avaliar('return location.hash')}`);
+  verificar(await aguardar('!document.querySelector(".comparacao") && document.querySelectorAll(".cartao-social").length === 1', 12000), 'deveria voltar a um cartão');
+});
+
+await caso('Comparação entre estados: o outro mostra o total do estado; "Mapa de" troca o recorte; tirar o 1º promove o 2º', async () => {
+  await abrir(`#/resultados?cand=${candSp[0]}&cand2=${doRj[0]}&uf=SP&mun=${capitalSp.cd}`);
+  verificar(await aguardar('document.querySelectorAll(".comparacao .cartao-social").length === 2', 12000), 'deveriam aparecer dois cartões');
+  verificar(await avaliar(`return location.hash.includes("mun=${capitalSp.cd}") && !location.hash.includes("foco")`), `filtros deveriam seguir o 1º: ${await avaliar('return location.hash')}`);
+  const locais = await avaliar('return [...document.querySelectorAll(".comparacao .social-local strong")].map(s => s.textContent)');
+  verificar(/São Paulo › /.test(locais[0]) && locais[1] === 'Rio de Janeiro', `locais dos cartões: ${locais}`);
+  verificar(await avaliar('return /outro estado/.test(document.querySelector(".comparacao-nota")?.textContent || "")'), 'nota de outro estado ausente');
+  verificar(await aguardar('!document.querySelector("#pagina-resultados .foco-mapa").hidden && !document.querySelector("#pagina-resultados .legenda-duelo")', 15000), 'estados diferentes: "Mapa de" deveria aparecer, sem duelo');
+  await avaliar('[...document.querySelectorAll("#pagina-resultados .foco-mapa .segmento")][1].click(); return 1');
+  verificar(await aguardar('location.hash.includes("foco=2") && location.hash.includes("uf=RJ") && !location.hash.includes("mun=")'), `"Mapa de" deveria levar o recorte ao RJ: ${await avaliar('return location.hash')}`);
+  verificar(await aguardar('document.querySelector("#pagina-resultados .mapa-cartao h2")?.textContent === "Rio de Janeiro" && document.querySelector("#pagina-resultados .legenda-densidade")', 20000), 'mapa do RJ não carregou');
+  verificar(await aguardar('(s => s.length === 2 && s[0] === "São Paulo" && s[1] === "Rio de Janeiro")([...document.querySelectorAll(".comparacao .social-local strong")].map(s => s.textContent))', 12000), 'com o foco no 2º, o 1º deveria mostrar o total de SP');
+  verificar(await avaliar('return document.querySelector("#f-uf").disabled && document.querySelector("#f-uf").value === "RJ"'), 'estado deveria ficar fixo no RJ');
+  await avaliar('document.querySelector(".filtros-principal .cand-chip .botao-icone").click(); return 1');
+  verificar(await aguardar(`location.hash.includes("cand=${doRj[0]}") && !location.hash.includes("cand2") && !location.hash.includes("foco")`), `tirar o 1º deveria promover o 2º: ${await avaliar('return location.hash')}`);
+  verificar(await aguardar('document.querySelectorAll(".cartao-social").length === 1 && !document.querySelector(".comparacao")', 12000), 'deveria sobrar um cartão');
+});
+
+await caso('Comparação Presidente × candidato estadual: recorte no estado do estadual, sem "voltar ao Brasil"', async () => {
+  await abrir(`#/resultados?cand=${presidente[0]}&cand2=${candSp[0]}`);
+  verificar(await aguardar('location.hash.includes("uf=SP")'), `deveria ir para SP: ${await avaliar('return location.hash')}`);
+  verificar(await aguardar('document.querySelectorAll(".comparacao .cartao-social").length === 2', 12000), 'deveriam aparecer dois cartões');
+  verificar(await aguardar('document.querySelector("#pagina-resultados .legenda-duelo")', 20000), 'duelo deveria aparecer no mapa de SP');
+  verificar(await avaliar('return document.querySelector("#pagina-resultados .mapa-cartao .cartao-topo > .botao-secundario").hidden && document.querySelector("#f-uf").disabled'), '"voltar ao Brasil" e a troca de estado não deveriam aparecer');
+});
+
+await caso(`Mapa "quem venceu": 2º turno só onde houve (Governador em ${ufSegundoTurno})`, async () => {
+  await abrir(`#/mapa?uf=${ufSegundoTurno}`);
+  verificar(await aguardar('document.querySelector(".chip-cargo")', 12000), 'atalhos não apareceram');
+  verificar(await avaliar('return document.querySelectorAll(".turno-mapa .segmento")[1].disabled'), 'sem cargo, o 2º turno deveria estar desligado');
+  await avaliar('[...document.querySelectorAll(".chip-cargo")].find(b => b.textContent === "Governador").click(); return 1');
+  verificar(await aguardar('document.querySelector("#pagina-mapa .legenda-partidos") && !document.querySelectorAll(".turno-mapa .segmento")[1].disabled', 15000), '2º turno de Governador deveria estar disponível');
+  await avaliar('document.querySelectorAll(".turno-mapa .segmento")[1].click(); return 1');
+  verificar(await aguardar('/2º turno/.test(document.querySelector("#pagina-mapa .legenda-titulo")?.textContent || "") && document.querySelectorAll("#pagina-mapa .mapa-regiao[class*=dens-]").length > 0', 15000), 'mapa do 2º turno não carregou');
+  await avaliar('[...document.querySelectorAll(".chip-cargo")].find(b => b.textContent === "Dep. Federal").click(); return 1');
+  verificar(await aguardar('/1º turno/.test(document.querySelector("#pagina-mapa .legenda-titulo")?.textContent || "") && document.querySelectorAll(".turno-mapa .segmento")[1].disabled', 15000), 'Deputado não tem 2º turno: deveria voltar ao 1º');
+});
+
 await caso('Logo do topo: volta ao início com todos os filtros limpos', async () => {
   await abrir(`#/mapa?cand=${govAc[0]}&uf=AC&mun=${ac.cd}&zona=${localAc.z}`);
   verificar(await aguardar('document.querySelector("#inicio")'), 'logo do topo ausente');
@@ -551,7 +637,7 @@ await caso('Tema claro/escuro: alterna, fica salvo e muda a cor do navegador', a
 
 // Design: sem rolagem horizontal, contraste de texto e nomes acessíveis, em todas as páginas,
 // nos dois temas e em 4 larguras de tela.
-const PAGINAS = ['#/resultados', `#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`, `#/mapa?cargo=deputado_federal&uf=SP&cand=${candSp[0]}`, '#/mapa?cargo=governador&uf=MG', '#/sobre', '#/tipografia'];
+const PAGINAS = ['#/resultados', `#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`, `#/resultados?cand=${candSp[0]}&cand2=${outroSp[0]}&uf=SP`, `#/resultados?cand=${candSp[0]}&cand2=${doRj[0]}&uf=SP`, `#/mapa?cargo=deputado_federal&uf=SP&cand=${candSp[0]}`, '#/mapa?cargo=governador&uf=MG', '#/sobre', '#/tipografia'];
 const AUDITORIA = `
   const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const rgba = s => { const m = s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p[3] ?? 1]; };

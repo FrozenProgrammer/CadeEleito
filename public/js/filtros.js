@@ -6,37 +6,56 @@ import { h, $, limpar, numero, titulo, situacao, debounce, icone, fotoCandidato 
 import { cargoDe, situacaoDe, feminino } from './genero.js';
 import { api } from './api.js';
 import { estado, contexto, definir, aoMudar } from './estado.js';
+import { candidatoA, candidatoB, compativeis, coresDuelo } from './comparacao.js';
 
 const NOMES_CARGO_CURTO = { deputado_federal: 'Dep. Federal', deputado_estadual: 'Dep. Estadual', deputado_distrital: 'Dep. Distrital' };
 // Nome do cargo concordando com a pessoa (Governadora, Senadora…).
 const nomeCargo = (id, c) => cargoDe(NOMES_CARGO_CURTO[id] || contexto.config.cargos.find(x => x.id === id)?.nome || '', c);
 
-// Candidato do filtro já carregado (o da URL pode ainda estar chegando).
-const candidatoAtual = () => (contexto.candidato && contexto.candidato.id === estado.cand ? contexto.candidato : null);
+// Candidatos do filtro já carregados (o da URL pode ainda estar chegando).
+const candidatoAtual = candidatoA;
 
+// 2º turno: só se todos os candidatos escolhidos (1 ou 2, na comparação) o disputaram.
 function turnoDisponivel(cargo, turno, uf = estado.uf) {
   if (turno === '1') return true;
-  const c = candidatoAtual();
-  if (c && !c.turno2) return false; // o candidato não disputou o 2º turno
+  const c = candidatoAtual(), c2 = candidatoB();
+  if ((c && !c.turno2) || (c2 && !c2.turno2)) return false;
   if (cargo === 'presidente') return contexto.config.segundoTurnoPresidente;
   if (cargo === 'governador') return !uf || contexto.config.segundoTurnoGovernador.includes(uf);
   return false;
 }
 
+// UF obrigatória do recorte: a do candidato principal (estadual); Presidente comparado com um
+// candidato estadual vai para o estado do outro. Vazio = qualquer UF (ou o Brasil).
+function ufObrigatoria(p, outro) {
+  if (!p) return '';
+  if (p.uf !== 'BR') return p.uf;
+  return outro && outro.uf !== 'BR' ? outro.uf : '';
+}
+
 // Corrige combinações impossíveis. O cargo é sempre o do candidato buscado (sem candidato, não há
 // cargo) e o candidato estadual fica no seu estado: números se repetem entre estados (o 1234 de SP
 // não é o 1234 do RJ), então um link editado com outra UF volta para a UF do candidato.
+// Na comparação, o recorte segue o candidato principal (ver js/comparacao.js).
 export function normalizarEstado() {
   const ajustes = {};
   const cfg = contexto.config;
   // UF inexistente (link editado à mão) ou município sem UF: volta ao nível válido mais alto.
   if (estado.uf && !cfg.ufs.some(u => u.sigla === estado.uf)) ajustes.uf = '';
   else if (!estado.uf && estado.mun) ajustes.mun = '';
+  // Comparação: sem o 1º candidato (ou com o mesmo nos dois) não há 2º; sem 2º, não há foco.
+  if (estado.cand2 && (!estado.cand || estado.cand2 === estado.cand)) ajustes.cand2 = '';
+  const cand2 = ajustes.cand2 ?? estado.cand2;
   const c = candidatoAtual();
+  const c2 = cand2 ? candidatoB() : null;
+  const pendente = !!cand2 && !c2; // 2º candidato ainda chegando: o foco fica como está
+  if (estado.foco && (!cand2 || compativeis(c, c2))) ajustes.foco = '';
   if (!estado.cand) { if (estado.cargo) ajustes.cargo = ''; }
-  else if (c) {
-    if (c.cargo !== estado.cargo) ajustes.cargo = c.cargo;
-    if (c.uf !== 'BR' && (ajustes.uf ?? estado.uf) !== c.uf) ajustes.uf = c.uf;
+  else if (c && !(pendente && estado.foco)) {
+    const p = (ajustes.foco ?? estado.foco) === '2' && c2 ? c2 : c;
+    if (p.cargo !== estado.cargo) ajustes.cargo = p.cargo;
+    const uf = ufObrigatoria(p, p === c ? c2 : c);
+    if (uf && (ajustes.uf ?? estado.uf) !== uf) ajustes.uf = uf;
   }
   const cargo = ajustes.cargo ?? estado.cargo;
   if (cargo && !cfg.cargos.some(x => x.id === cargo)) ajustes.cargo = '';
@@ -45,7 +64,26 @@ export function normalizarEstado() {
 }
 
 // Sem candidato não há filtro: volta à tela inicial, só com a busca.
-const limparTudo = () => { contexto.candidato = null; definir({ cand: '', cargo: '', uf: '', turno: '1' }); };
+const limparTudo = () => { contexto.candidato = null; contexto.candidato2 = null; definir({ cand: '', cand2: '', foco: '', cargo: '', uf: '', turno: '1' }); };
+
+// Tirar o 1º candidato da comparação: o 2º passa a ser o 1º (no estado dele).
+function removerA() {
+  const b = candidatoB();
+  if (!b) return limparTudo();
+  contexto.candidato = b; contexto.candidato2 = null;
+  const alt = { cand: b.id, cand2: '', foco: '', cargo: b.cargo };
+  if (b.uf !== 'BR' && estado.uf !== b.uf) alt.uf = b.uf;
+  definir(alt);
+}
+
+// Tirar o 2º: o recorte volta a seguir o 1º (se seguia o 2º, volta ao estado do 1º).
+function removerB() {
+  const a = candidatoAtual();
+  contexto.candidato2 = null;
+  const alt = { cand2: '', foco: '' };
+  if (a && estado.foco === '2') { alt.cargo = a.cargo; alt.uf = a.uf === 'BR' ? '' : a.uf; }
+  definir(alt);
+}
 
 // ---------------------------------------------------------------------------
 // Componentes.
@@ -66,26 +104,44 @@ function preencher(sel, opcoes, valor, vazio) {
   sel.value = opcoes.some(o => o.valor === valor) ? valor : '';
 }
 
-// Combobox acessível para busca de candidatos.
-function criarBuscaCandidato() {
-  const lista = h('ul', { id: 'cand-lista', class: 'combo-lista', role: 'listbox', hidden: true });
+// Troca do 1º candidato no mesmo estado (ou para Presidente, que vale em qualquer recorte): os
+// filtros ficam (estado, município, zona… e o turno, se ele disputou) e só os números mudam.
+// De outro estado: começa no recorte dele, o estado (ou o Brasil), 1º turno.
+function escolherA(c) {
+  contexto.candidato = c;
+  const mesmoEstado = c.uf === 'BR' || c.uf === estado.uf;
+  const alt = mesmoEstado ? { cand: c.id, cargo: c.cargo, foco: '' } : { cand: c.id, cargo: c.cargo, foco: '', uf: c.uf === 'BR' ? '' : c.uf, turno: '1' };
+  if (c.id === estado.cand2) { alt.cand2 = ''; contexto.candidato2 = null; } // o 2º virou o 1º
+  definir(alt);
+}
+
+// 2º candidato (comparação): os filtros ficam. Presidente × candidato estadual vai para o estado
+// do estadual (é onde os dois têm votos); estados diferentes: o recorte continua o do 1º.
+function escolherB(c) {
+  const a = candidatoAtual();
+  if (!a || c.id === a.id) return;
+  contexto.candidato2 = c;
+  const alt = { cand2: c.id, foco: '' };
+  if (a.uf === 'BR' && c.uf !== 'BR' && estado.uf !== c.uf) alt.uf = c.uf;
+  definir(alt);
+}
+
+// Combobox acessível para busca de candidatos. Duas instâncias: a busca principal (prefixo
+// "cand") e a do candidato para comparar ("cand2").
+function criarBuscaCandidato({ prefixo = 'cand', placeholder = 'Buscar candidato por nome ou número', aoEscolher, atual, remover, excluir = () => '' }) {
+  const lista = h('ul', { id: `${prefixo}-lista`, class: 'combo-lista', role: 'listbox', hidden: true });
   const entrada = h('input', {
-    id: 'cand-busca', class: 'controle controle-busca', type: 'search', autocomplete: 'off', spellcheck: 'false',
-    placeholder: 'Buscar candidato por nome ou número', role: 'combobox', 'aria-expanded': 'false', 'aria-controls': 'cand-lista', 'aria-autocomplete': 'list', maxlength: '60',
+    id: `${prefixo}-busca`, class: 'controle controle-busca', type: 'search', autocomplete: 'off', spellcheck: 'false',
+    placeholder, role: 'combobox', 'aria-expanded': 'false', 'aria-controls': `${prefixo}-lista`, 'aria-autocomplete': 'list', maxlength: '60',
   });
   const chip = h('div', { class: 'cand-chip', hidden: true });
   let itens = [], ativo = -1, seq = 0;
 
   const fechar = () => { lista.hidden = true; entrada.setAttribute('aria-expanded', 'false'); entrada.removeAttribute('aria-activedescendant'); ativo = -1; };
   const escolher = c => {
-    contexto.candidato = c;
     entrada.value = '';
     fechar();
-    // Troca de candidato no mesmo estado (ou para Presidente, que vale em qualquer recorte): os
-    // filtros ficam (estado, município, zona… e o turno, se ele disputou) e só os números mudam.
-    // De outro estado: começa no recorte dele, o estado (ou o Brasil), 1º turno.
-    const mesmoEstado = c.uf === 'BR' || c.uf === estado.uf;
-    definir(mesmoEstado ? { cand: c.id, cargo: c.cargo } : { cand: c.id, cargo: c.cargo, uf: c.uf === 'BR' ? '' : c.uf, turno: '1' });
+    aoEscolher(c);
   };
   const marcar = i => {
     ativo = i;
@@ -97,9 +153,9 @@ function criarBuscaCandidato() {
     const minha = ++seq;
     if (q.length < 2) return fechar();
     try {
-      itens = await api('/api/candidatos', { q });
+      itens = (await api('/api/candidatos', { q })).filter(c => c.id !== excluir());
       if (minha !== seq) return;
-      limpar(lista, itens.length ? itens.map((c, i) => h('li', { id: `cand-op-${i}`, role: 'option', class: 'combo-item', 'aria-selected': 'false', onmousedown: e => { e.preventDefault(); escolher(c); } },
+      limpar(lista, itens.length ? itens.map((c, i) => h('li', { id: `${prefixo}-op-${i}`, role: 'option', class: 'combo-item', 'aria-selected': 'false', onmousedown: e => { e.preventDefault(); escolher(c); } },
         fotoCandidato(c, 'combo-foto'),
         h('span', { class: 'combo-num', text: c.numero }),
         h('span', { class: 'combo-texto' },
@@ -125,25 +181,46 @@ function criarBuscaCandidato() {
     else if (e.key === 'Escape') fechar();
   });
 
-  const atualizarChip = () => {
-    const c = contexto.candidato;
+  // cor: na comparação, o fio do lado esquerdo tem a cor do candidato no mapa e nos cartões.
+  const atualizarChip = cor => {
+    const c = atual();
     chip.hidden = !c;
+    chip.classList.toggle('com-cor', !!cor);
+    if (cor) chip.style.setProperty('--lado', cor); else chip.style.removeProperty('--lado');
     if (!c) return limpar(chip);
     limpar(chip,
       fotoCandidato(c, 'cand-chip-foto'),
       h('span', { class: 'cand-chip-num', text: c.numero }),
       h('span', { class: 'cand-chip-texto' }, h('strong', { text: titulo(c.nome) }), h('small', { text: `${c.partido} · ${nomeCargo(c.cargo, c)} · ${c.uf}` })),
-      h('button', { type: 'button', class: 'botao-icone', 'aria-label': 'Remover candidato do filtro', title: 'Remover candidato', onclick: limparTudo }, icone('fechar')));
+      h('button', { type: 'button', class: 'botao-icone', 'aria-label': `Remover ${titulo(c.nome)} do filtro`, title: 'Remover candidato', onclick: remover }, icone('fechar')));
   };
 
   const raiz = h('div', { class: 'combo' }, h('span', { class: 'combo-icone' }, icone('busca')), entrada, lista);
-  return { raiz, chip, atualizarChip };
+  return { raiz, chip, entrada, atualizarChip };
 }
 
 // ---------------------------------------------------------------------------
 
 export function criarFiltros(container) {
-  const busca = criarBuscaCandidato();
+  const busca = criarBuscaCandidato({ aoEscolher: escolherA, atual: candidatoAtual, remover: removerA, excluir: () => estado.cand2 });
+  // Comparação: o botão "Comparar" abre a 2ª busca; escolhido, o 2º candidato vira um chip.
+  let abrirComparar = false;
+  const busca2 = criarBuscaCandidato({
+    prefixo: 'cand2', placeholder: 'Comparar com outro candidato', atual: candidatoB, remover: removerB, excluir: () => estado.cand,
+    aoEscolher: c => { abrirComparar = false; escolherB(c); },
+  });
+  const botaoComparar = h('button', {
+    type: 'button', class: 'botao-secundario botao-comparar',
+    onclick: () => { abrirComparar = true; render(); busca2.entrada.focus(); },
+  }, h('span', { class: 'botao-comparar-mais', 'aria-hidden': 'true', text: '+' }), 'Comparar com outro candidato');
+  const fecharComparar = h('button', {
+    type: 'button', class: 'botao-icone', 'aria-label': 'Cancelar a comparação', title: 'Cancelar',
+    onclick: () => { abrirComparar = false; busca2.entrada.value = ''; render(); botaoComparar.focus(); },
+  }, icone('fechar'));
+  const rotuloComparar = h('span', { class: 'campo-rotulo', text: 'Comparando com', hidden: true });
+  const linhaComparar = h('div', { class: 'filtros-linha filtros-comparar' },
+    h('div', { class: 'filtros-busca' }, botaoComparar, busca2.raiz, fecharComparar, rotuloComparar, busca2.chip));
+  busca2.entrada.addEventListener('keydown', e => { if (e.key === 'Escape' && !busca2.entrada.value) fecharComparar.click(); });
   const turnos = h('div', { class: 'segmentado', role: 'radiogroup', 'aria-label': 'Turno' });
   const sUf = select('f-uf', v => definir({ uf: v }));
   const sMun = select('f-mun', v => definir({ mun: v }));
@@ -167,6 +244,7 @@ export function criarFiltros(container) {
       h('div', { class: 'filtros-busca' }, busca.raiz, busca.chip),
       h('div', { class: 'campo campo-turno' }, h('span', { class: 'campo-rotulo', text: 'Turno' }), turnos),
     ),
+    linhaComparar,
     h('div', { class: 'filtros-linha filtros-cascata' },
       campo('Estado', sUf, 'f-uf'),
       campo('Município', sMun, 'f-mun'),
@@ -204,16 +282,20 @@ export function criarFiltros(container) {
     const cfg = contexto.config;
     // Sem candidato: só a busca por nome ou número.
     container.classList.toggle('filtros-so-busca', !estado.cand);
-    const c = candidatoAtual();
-    // Turno
+    const c = candidatoAtual(), c2 = candidatoB();
+    // Turno. Na comparação, o 2º turno só vale se os dois o disputaram (o título diz quem não).
+    const semSegundo = [c, c2].find(x => x && !x.turno2);
     limpar(turnos, ['1', '2'].map(t => {
       const disp = turnoDisponivel(estado.cargo, t);
-      return h('button', { type: 'button', role: 'radio', class: 'segmento', 'aria-checked': String(estado.turno === t), disabled: !disp || undefined, title: disp ? '' : `${feminino(c) ? 'A candidata' : 'O candidato'} não disputou o 2º turno`, onclick: () => definir({ turno: t }) }, `${t}º`);
+      const motivo = !semSegundo ? 'Não houve 2º turno para este cargo neste recorte' : c2 ? `${titulo(semSegundo.nome)} não disputou o 2º turno` : `${feminino(semSegundo) ? 'A candidata' : 'O candidato'} não disputou o 2º turno`;
+      return h('button', { type: 'button', role: 'radio', class: 'segmento', 'aria-checked': String(estado.turno === t), disabled: !disp || undefined, title: disp ? '' : motivo, onclick: () => definir({ turno: t }) }, `${t}º`);
     }));
     // Estado: candidato estadual só existe no seu estado (o campo fica fixo); Presidente, em todos.
-    const fixo = c && c.uf !== 'BR';
-    sUf.disabled = !!fixo;
-    preencher(sUf, cfg.ufs.filter(u => !fixo || u.sigla === c.uf).map(u => ({ valor: u.sigla, texto: `${u.nome} (${u.sigla})` })), estado.uf, fixo ? null : 'Brasil (todos)');
+    // Na comparação vale a UF do candidato principal (ou a do estadual, se o outro é Presidente).
+    const p = estado.foco === '2' && c2 ? c2 : c;
+    const ufFixa = ufObrigatoria(p, p === c ? c2 : c);
+    sUf.disabled = !!ufFixa;
+    preencher(sUf, cfg.ufs.filter(u => !ufFixa || u.sigla === ufFixa).map(u => ({ valor: u.sigla, texto: `${u.nome} (${u.sigla})` })), estado.uf, ufFixa ? null : 'Brasil (todos)');
     // Município
     sMun.disabled = !estado.uf;
     preencher(sMun, contexto.municipios.map(m => ({ valor: m.cd, texto: titulo(m.nm) + (m.capital ? ' (capital)' : '') })), estado.mun, estado.uf ? 'Todos os municípios' : 'Escolha o estado');
@@ -244,7 +326,15 @@ export function criarFiltros(container) {
     dicaSecao.textContent = !mun ? '' : L?.erro
       ? 'O detalhamento por bairro, local e seção deste estado não está incluído nesta publicação.'
       : 'Bairro, local de votação e seção somam os votos oficiais de cada seção eleitoral.';
-    busca.atualizarChip();
+    // Comparação: botão, 2ª busca ou o chip do 2º candidato. Os chips levam a cor de cada um.
+    linhaComparar.hidden = !c;
+    if (!c) abrirComparar = false;
+    const cores = c && c2 ? coresDuelo(c, c2) : [];
+    botaoComparar.hidden = !!c2 || abrirComparar;
+    busca2.raiz.hidden = fecharComparar.hidden = !!c2 || !abrirComparar;
+    rotuloComparar.hidden = !c2;
+    busca.atualizarChip(cores[0]);
+    busca2.atualizarChip(cores[1]);
   }
 
   aoMudar(async mudou => {

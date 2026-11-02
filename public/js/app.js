@@ -37,10 +37,14 @@ function renderizarPagina() {
   paginas[estado.pagina]?.carregar();
 }
 
+// Candidatos da URL (o 1º e, na comparação, o 2º). Id inexistente sai da URL.
 async function restaurarCandidato() {
-  if (!estado.cand) { contexto.candidato = null; return; }
-  if (contexto.candidato?.id === estado.cand) return;
-  try { contexto.candidato = await api('/api/candidato', { id: estado.cand }); } catch { contexto.candidato = null; definir({ cand: '' }); }
+  const carregar = async (campo, chave) => {
+    if (!estado[campo]) { contexto[chave] = null; return; }
+    if (contexto[chave]?.id === estado[campo]) return;
+    try { contexto[chave] = await api('/api/candidato', { id: estado[campo] }); } catch { contexto[chave] = null; definir({ [campo]: '' }); }
+  };
+  await Promise.all([carregar('cand', 'candidato'), carregar('cand2', 'candidato2')]);
 }
 
 async function iniciar() {
@@ -65,13 +69,14 @@ async function iniciar() {
   $('#inicio').addEventListener('click', e => {
     e.preventDefault();
     contexto.candidato = null;
+    contexto.candidato2 = null;
     if (location.hash !== '#/resultados') location.hash = '#/resultados';
     window.scrollTo({ top: 0 });
     $('#cand-busca')?.focus({ preventScroll: true });
   });
   aoMudar(async mudou => {
     // O cargo e o estado vêm do candidato: depois de carregá-lo, aplica as regras de novo.
-    if (mudou.has('cand')) { await restaurarCandidato(); normalizarEstado(); filtros.render(); }
+    if (mudou.has('cand') || mudou.has('cand2')) { await restaurarCandidato(); normalizarEstado(); filtros.render(); }
     renderizarPagina();
     if (mudou.has('pagina')) window.scrollTo({ top: 0 });
   });
