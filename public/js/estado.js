@@ -3,7 +3,7 @@
 
 // cand2: 2º candidato (comparação); foco: '2' quando o recorte segue o 2º (candidatos de estados diferentes).
 const CAMPOS = ['turno', 'cargo', 'uf', 'mun', 'zona', 'bairro', 'local', 'secao', 'cand', 'cand2', 'foco'];
-const PAGINAS = ['resultados', 'mapa', 'sobre', 'tipografia'];
+const PAGINAS = ['resultados', 'mapa', 'sobre'];
 const FORMATOS = {
   turno: /^[12]$/, cargo: /^[a-z_]{1,30}$/, uf: /^[A-Z]{2}$/, mun: /^\d{5}$/, zona: /^[1-9]\d{0,3}$/,
   bairro: /^[^\u0000-\u001f]{1,150}$/, local: /^[1-9]\d{0,4}$/, secao: /^[1-9]\d{0,4}$/, cand: /^\d{1,20}$/, cand2: /^\d{1,20}$/, foco: /^2$/,

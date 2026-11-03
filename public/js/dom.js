@@ -47,8 +47,10 @@ export function titulo(s) {
 }
 
 // Situação da candidatura: "ELEITO POR QP" -> "Eleito por QP", "NÃO ELEITO" -> "Não eleito".
+// "2º TURNO" (resultado do 1º turno) vira "Foi ao 2º turno": sozinho parecia o turno exibido.
 export function situacao(s) {
   const t = String(s || '').toLocaleLowerCase('pt-BR');
+  if (/^2\s*[ºo°]?\s*turno$/.test(t)) return 'Foi ao 2º turno';
   return (t.charAt(0).toLocaleUpperCase('pt-BR') + t.slice(1)).replace(/\bqp\b/g, 'QP');
 }
 

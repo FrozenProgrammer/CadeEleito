@@ -606,23 +606,15 @@ await caso('Logo do topo: volta ao início com todos os filtros limpos', async (
   verificar(await avaliar('return /início/i.test(document.querySelector("#inicio").title) && document.querySelector("#inicio").textContent.includes("Cadê o eleito?")'), 'logo sem nome acessível');
 });
 
-await caso('Página Gráficos foi removida: link antigo abre Resultados e o menu não a lista', async () => {
+await caso('Página Gráficos foi removida: link antigo abre a Página Inicial e o menu não a lista', async () => {
   await abrir('#/graficos?cargo=senador&uf=SP');
   verificar(await avaliar('return !document.querySelector("[data-pagina=graficos], #pagina-graficos") && !document.querySelector("#pagina-resultados").hidden'), 'Gráficos ainda existe');
 });
 
-await caso('Typography: 10 combinações de fontes com título, cartão e tabela, sem filtros', async () => {
+await caso('Página Typography foi removida: link antigo abre a Página Inicial e o menu não a lista', async () => {
   await abrir('#/tipografia');
-  verificar(await aguardar('document.querySelectorAll("#pagina-tipografia .tipo-opcao").length === 10', 8000), 'a página deveria ter 10 opções');
-  verificar(await avaliar('return document.querySelector("#filtros").hidden && document.querySelector("[data-pagina=tipografia][aria-current=page]")?.textContent === "Typography"'), 'filtros visíveis ou menu sem a página');
-  // Cada opção usa as próprias fontes, e elas são baixadas do próprio site.
-  const r = await avaliar(`
-    await document.fonts.ready;
-    const titulos = [...document.querySelectorAll('#pagina-tipografia .tipo-heroi .t-titulo')].map(t => getComputedStyle(t).fontFamily.split(',')[0]);
-    return { distintos: new Set(titulos).size, carregadas: [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replace(/"/g, '')) };`);
-  verificar(r.distintos === 10, `as 10 opções deveriam ter fontes de título diferentes (${r.distintos})`);
-  for (const f of ['Playfair Display', 'Oswald', 'Fraunces']) verificar(r.carregadas.includes(f), `fonte ${f} não carregou`);
-  await foto('07-tipografia');
+  verificar(await avaliar('return !document.querySelector("[data-pagina=tipografia], #pagina-tipografia") && !document.querySelector("#pagina-resultados").hidden'), 'Typography ainda existe');
+  verificar(await avaliar('return [...document.styleSheets].every(f => !/tipografia/.test(f.href || ""))'), 'css/tipografia.css ainda é carregado');
 });
 
 await caso('Tema claro/escuro: alterna, fica salvo e muda a cor do navegador', async () => {
@@ -637,7 +629,7 @@ await caso('Tema claro/escuro: alterna, fica salvo e muda a cor do navegador', a
 
 // Design: sem rolagem horizontal, contraste de texto e nomes acessíveis, em todas as páginas,
 // nos dois temas e em 4 larguras de tela.
-const PAGINAS = ['#/resultados', `#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`, `#/resultados?cand=${candSp[0]}&cand2=${outroSp[0]}&uf=SP`, `#/resultados?cand=${candSp[0]}&cand2=${doRj[0]}&uf=SP`, `#/mapa?cargo=deputado_federal&uf=SP&cand=${candSp[0]}`, '#/mapa?cargo=governador&uf=MG', '#/sobre', '#/tipografia'];
+const PAGINAS = ['#/resultados', `#/resultados?cand=${candSp[0]}&uf=SP&mun=${capitalSp.cd}`, `#/resultados?cand=${candSp[0]}&cand2=${outroSp[0]}&uf=SP`, `#/resultados?cand=${candSp[0]}&cand2=${doRj[0]}&uf=SP`, `#/mapa?cargo=deputado_federal&uf=SP&cand=${candSp[0]}`, '#/mapa?cargo=governador&uf=MG', '#/sobre'];
 const AUDITORIA = `
   const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
   const rgba = s => { const m = s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p[3] ?? 1]; };

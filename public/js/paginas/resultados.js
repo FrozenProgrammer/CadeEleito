@@ -1,4 +1,4 @@
-// Página "Resultados" (inicial): busca do candidato, cartão com os números dele no recorte
+// Página Inicial (rota #/resultados): busca do candidato, cartão com os números dele no recorte
 // escolhido nos filtros (pronto para compartilhar nas redes) e, abaixo, o mapa de densidade.
 // Comparação (2º candidato nos filtros): dois cartões lado a lado. No mesmo estado, os dois no
 // mesmo recorte; em estados diferentes, o do foco no recorte e o outro com o total do estado dele.

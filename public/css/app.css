@@ -2,10 +2,10 @@
    Tema escuro em tons de cinza, azul e neutros. Cada página tem a sua cor de destaque
    (ver "temas por página"). Paleta dos gráficos: paleta de referência validada para o
    fundo escuro (CVD e contraste).
-   Tipografia editorial (opção 2 da página Typography): Newsreader, serifa de jornal, nos títulos e
+   Tipografia editorial: Newsreader, serifa de jornal, nos títulos e
    nomes (peso 600, sem espaçamento negativo); Inter no texto, nos controles e nos números
    (tabulares, alinhados). As duas ficam em public/fonts (licença OFL, sem CDN: a CSP só permite
-   fontes do próprio site). As outras opções de comparação estão em css/tipografia.css. */
+   fontes do próprio site). */
 
 @font-face {
   font-family: "Newsreader"; font-style: normal; font-weight: 200 800; font-display: swap;
@@ -740,7 +740,7 @@ section.cartao { padding: 18px 20px; }
   .topo-interno { height: auto; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
   .navegacao { margin-left: 0; width: 100%; justify-content: space-between; order: 2; }
   .tema-botao { margin-left: auto; order: 1; width: 40px; height: 40px; }
-  .navegacao a { padding: 7px 6px; flex: 1; justify-content: center; font-size: .72rem; }
+  .navegacao a { padding: 7px 6px; flex: 1 1 auto; white-space: nowrap; justify-content: center; font-size: .72rem; }
   .heroi { padding: 22px 0 84px; }
   .filtros { padding: 14px; }
   .filtros-cascata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
