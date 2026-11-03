@@ -372,6 +372,34 @@ await caso('Mapa sem candidato: Brasil sem painel; no estado, atalhos de cargo, 
   await foto('03b-mapa-quem-venceu');
 });
 
+await caso('Aba Mapa: caixa "Cidade" (só sem candidato) busca sem acento, seleciona, aproxima e some com candidato', async () => {
+  const caixa = '#pagina-mapa .mapa-cidade';
+  const visivel = `(() => { const e = document.querySelector('${caixa}'); return !!e && !e.hidden && !!e.offsetParent; })()`;
+  await abrir('#/mapa');
+  verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao").length === 27', 12000), 'mapa do Brasil não carregou');
+  verificar(!(await avaliar(`return ${visivel}`)), 'no mapa do Brasil não há caixa de cidade');
+  await abrir('#/mapa?uf=SP');
+  verificar(await aguardar(`${visivel} && !document.querySelector('${caixa} input').disabled`, 15000), 'caixa "Cidade" deveria aparecer no estado');
+  const vb = await avaliar('return document.querySelector("#pagina-mapa .mapa-svg").getAttribute("viewBox")');
+  await avaliar(`const i = document.querySelector('${caixa} input'); i.focus(); i.value = 'sao jose dos c'; i.dispatchEvent(new Event('input')); return 1`);
+  verificar(await aguardar(`[...document.querySelectorAll('${caixa} .combo-item')].some(li => li.textContent === 'São José dos Campos')`, 3000), 'busca sem acento não achou São José dos Campos');
+  await avaliar(`document.querySelector('${caixa} input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return 1`);
+  verificar(await aguardar(`/mun=\\d+/.test(location.hash) && document.querySelector('${caixa} input').value === 'São José dos Campos' && !!document.querySelector('#pagina-mapa .mapa-selecao[d]')`, 5000), 'Enter deveria escolher a cidade e contorná-la no mapa');
+  verificar(await aguardar(`document.querySelector('#pagina-mapa .mapa-svg').getAttribute('viewBox') !== '${vb}'`, 3000), 'o mapa deveria aproximar da cidade escolhida');
+  verificar(await avaliar('return /Escolha um cargo acima para ver os mais votados em São José dos Campos/.test(document.querySelector("#pagina-mapa .mapa-painel").textContent)'), 'sem cargo, o painel deveria pedir o cargo');
+  // Com cargo: os mais votados da cidade, e o mapa redesenhado continua aproximado nela.
+  await avaliar('[...document.querySelectorAll("#pagina-mapa .chip-cargo")].find(b => b.textContent === "Governador").click(); return 1');
+  verificar(await aguardar('/São José dos Campos/.test(document.querySelector("#pagina-mapa .painel-subtitulo")?.textContent || "") && document.querySelectorAll("#pagina-mapa .tabela-ranking tbody tr").length >= 1', 15000), 'com cargo, deveria mostrar os mais votados da cidade');
+  verificar(await aguardar(`document.querySelector('#pagina-mapa .mapa-svg').getAttribute('viewBox') !== '${vb}'`, 3000), 'ao trocar o cargo, o mapa deveria continuar aproximado na cidade');
+  // ✕ tira a cidade.
+  await avaliar(`document.querySelector('${caixa} .mapa-cidade-limpar').click(); return 1`);
+  verificar(await aguardar(`!/mun=/.test(location.hash) && document.querySelector('${caixa} input').value === ''`, 3000), '✕ deveria tirar a cidade');
+  // Com candidato no filtro, a caixa some (o município fica nos filtros).
+  await abrir(`#/mapa?cargo=deputado_federal&uf=SP&cand=${candSp[0]}`);
+  verificar(await aguardar('document.querySelector("#pagina-mapa .legenda-densidade")', 15000), 'mapa do candidato não carregou');
+  verificar(!(await avaliar(`return ${visivel}`)), 'com candidato, a caixa "Cidade" não deveria aparecer');
+});
+
 await caso('Mapa de densidade (SP): só o candidato filtrado, cor mais forte = maior %, legenda com escala', async () => {
   const [id] = candSp;
   await abrir(`#/mapa?cargo=deputado_federal&uf=SP&cand=${id}`);
@@ -554,7 +582,7 @@ await caso('Comparação no mesmo estado: 2º candidato mantém os filtros, cart
   await avaliar('delete document.documentElement.dataset.tema; return 1');
   await foto('17-comparacao');
   // Tirar o 2º: volta a um cartão, filtros mantidos.
-  await avaliar('document.querySelector(".filtros-comparar .cand-chip .botao-icone").click(); return 1');
+  await avaliar('document.querySelector(".campo-cand-b .cand-chip .botao-icone").click(); return 1');
   verificar(await aguardar(`!location.hash.includes("cand2=") && location.hash.includes("mun=${capitalSp.cd}")`), `remover o 2º deveria manter os filtros: ${await avaliar('return location.hash')}`);
   verificar(await aguardar('!document.querySelector(".comparacao") && document.querySelectorAll(".cartao-social").length === 1', 12000), 'deveria voltar a um cartão');
 });
@@ -572,7 +600,7 @@ await caso('Comparação entre estados: o outro mostra o total do estado; "Mapa 
   verificar(await aguardar('document.querySelector("#pagina-resultados .mapa-cartao h2")?.textContent === "Rio de Janeiro" && document.querySelector("#pagina-resultados .legenda-densidade")', 20000), 'mapa do RJ não carregou');
   verificar(await aguardar('(s => s.length === 2 && s[0] === "São Paulo" && s[1] === "Rio de Janeiro")([...document.querySelectorAll(".comparacao .social-local strong")].map(s => s.textContent))', 12000), 'com o foco no 2º, o 1º deveria mostrar o total de SP');
   verificar(await avaliar('return document.querySelector("#f-uf").disabled && document.querySelector("#f-uf").value === "RJ"'), 'estado deveria ficar fixo no RJ');
-  await avaliar('document.querySelector(".filtros-principal .cand-chip .botao-icone").click(); return 1');
+  await avaliar('document.querySelector(".campo-cand-a .cand-chip .botao-icone").click(); return 1');
   verificar(await aguardar(`location.hash.includes("cand=${doRj[0]}") && !location.hash.includes("cand2") && !location.hash.includes("foco")`), `tirar o 1º deveria promover o 2º: ${await avaliar('return location.hash')}`);
   verificar(await aguardar('document.querySelectorAll(".cartao-social").length === 1 && !document.querySelector(".comparacao")', 12000), 'deveria sobrar um cartão');
 });

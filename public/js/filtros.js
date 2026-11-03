@@ -212,14 +212,17 @@ export function criarFiltros(container) {
   const botaoComparar = h('button', {
     type: 'button', class: 'botao-secundario botao-comparar',
     onclick: () => { abrirComparar = true; render(); busca2.entrada.focus(); },
-  }, h('span', { class: 'botao-comparar-mais', 'aria-hidden': 'true', text: '+' }), 'Comparar com outro candidato');
+  }, h('span', { class: 'botao-comparar-mais', 'aria-hidden': 'true', text: '+' }), 'Adicionar candidato');
   const fecharComparar = h('button', {
     type: 'button', class: 'botao-icone', 'aria-label': 'Cancelar a comparação', title: 'Cancelar',
     onclick: () => { abrirComparar = false; busca2.entrada.value = ''; render(); botaoComparar.focus(); },
   }, icone('fechar'));
-  const rotuloComparar = h('span', { class: 'campo-rotulo', text: 'Comparando com', hidden: true });
+  // Candidatos em duas colunas iguais, com rótulo: os chips ficam alinhados entre si e com a
+  // cascata abaixo (as 2 colunas coincidem com 3 + 3 das 6 da cascata).
   const linhaComparar = h('div', { class: 'filtros-linha filtros-comparar' },
-    h('div', { class: 'filtros-busca' }, botaoComparar, busca2.raiz, fecharComparar, rotuloComparar, busca2.chip));
+    h('div', { class: 'campo campo-cand campo-cand-a' }, h('span', { class: 'campo-rotulo', text: 'Candidato' }), busca.chip),
+    h('div', { class: 'campo campo-cand campo-cand-b' }, h('span', { class: 'campo-rotulo', text: 'Comparar com' }),
+      h('div', { class: 'filtros-busca' }, botaoComparar, busca2.raiz, fecharComparar, busca2.chip)));
   busca2.entrada.addEventListener('keydown', e => { if (e.key === 'Escape' && !busca2.entrada.value) fecharComparar.click(); });
   const turnos = h('div', { class: 'segmentado', role: 'radiogroup', 'aria-label': 'Turno' });
   const sUf = select('f-uf', v => definir({ uf: v }));
@@ -241,7 +244,7 @@ export function criarFiltros(container) {
 
   limpar(container,
     h('div', { class: 'filtros-linha filtros-principal' },
-      h('div', { class: 'filtros-busca' }, busca.raiz, busca.chip),
+      h('div', { class: 'filtros-busca' }, busca.raiz),
       h('div', { class: 'campo campo-turno' }, h('span', { class: 'campo-rotulo', text: 'Turno' }), turnos),
     ),
     linhaComparar,
@@ -332,7 +335,6 @@ export function criarFiltros(container) {
     const cores = c && c2 ? coresDuelo(c, c2) : [];
     botaoComparar.hidden = !!c2 || abrirComparar;
     busca2.raiz.hidden = fecharComparar.hidden = !!c2 || !abrirComparar;
-    rotuloComparar.hidden = !c2;
     busca.atualizarChip(cores[0]);
     busca2.atualizarChip(cores[1]);
   }

@@ -4,7 +4,8 @@
 // da cor do partido dele: quanto maior o percentual, mais forte a cor. Clicar em um estado aproxima
 // o mapa; clicar em um município aproxima (página inicial) ou só o seleciona (aba Mapa).
 // Aba Mapa, sem candidato, num estado: mapa "quem venceu" — cada município na cor do partido do
-// mais votado do cargo escolhido nos atalhos ao lado, e os 3 mais votados do município clicado.
+// mais votado do cargo escolhido nos atalhos ao lado, e os mais votados do município clicado (ou
+// buscado na caixa "Cidade" do mapa, que aproxima o mapa dele; a caixa some quando há candidato).
 // Comparação (dois candidatos do mesmo estado, ou um deles Presidente): mapa do "duelo" — cada área
 // na cor de quem teve o maior % dos votos válidos ali, mais forte quanto maior a vantagem (em pontos
 // percentuais). Estados diferentes: o mapa mostra um dos dois (botões "Mapa de").
@@ -169,6 +170,9 @@ function caixa(d) {
 
 let instancias = 0; // ids únicos (clip-path) quando há dois mapas na página
 
+// Busca de cidade sem diferenciar acentos e maiúsculas ("sao paulo" acha "São Paulo").
+const semAcento = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+
 // Momento da última rolagem da página: a roda do mouse que vinha rolando a página e "passa" por
 // cima do mapa continua rolando a página, em vez de virar zoom de repente.
 let ultimaRolagem = 0;
@@ -190,19 +194,22 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
   const leg = h('div', { class: 'mapa-legenda' });
   const tabela = h('div', { class: 'mapa-tabela' });
   const painel = h('div', { class: 'mapa-painel-conteudo' });
+  let focarMapa = null; // aproxima o mapa do estado numa cidade (definido a cada desenho)
+  let cidadeBuscada = ''; // cidade escolhida na caixa: o mapa volta a aproximar dela ao redesenhar (outro cargo/turno)
+  const cidade = criarBuscaCidade();
 
   // Aba Mapa sem candidato: como interagir com o mapa (some quando há candidato no filtro).
   const guia = h('ol', { class: 'mapa-guia', 'aria-label': 'Como usar o mapa', hidden: true },
     [
       'Clique em um estado para abrir o mapa dele.',
       'Escolha um cargo para colorir cada cidade pelo partido do mais votado.',
-      'Clique em uma cidade para ver o ranking.',
+      'Clique em uma cidade (ou busque no campo Cidade) para ver o ranking.',
       'Ou busque um candidato para ver onde teve votos.',
     ].map((t, i) => h('li', {}, h('b', { 'aria-hidden': 'true', text: String(i + 1) }), h('span', { text: t }))));
   const lateral = h('aside', { class: 'cartao mapa-painel', 'aria-live': 'polite' }, painel);
   const layout = h('div', { class: 'mapa-layout' },
     h('section', { class: 'cartao mapa-cartao' },
-      h('div', { class: 'cartao-topo' }, h('div', {}, titulo1, subtitulo), voltar, modoSel, focoSel),
+      h('div', { class: 'cartao-topo' }, h('div', {}, titulo1, subtitulo), cidade.raiz, voltar, modoSel, focoSel),
       area, ajuda, leg, tabela),
     lateral);
   limpar(raiz, h('div', { class: 'pagina-conteudo' }, guia, layout));
@@ -230,6 +237,7 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
   // Zona escolhida: as outras zonas (um caminho cada) ficam apagadas. Município/local escolhido:
   // contorno na camada de cima (sem mexer no estilo das áreas do mapa).
   function destacarSelecao() {
+    cidade.sincronizar();
     const alvo = idSelecionado();
     for (const [el, id] of apagaveis) el.classList.toggle('apagada', !!alvo && id !== alvo);
     if (!camadaSelecao) return;
@@ -380,6 +388,10 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
     const a = sel && atual.vencedores.get(sel.id);
     if (a?.ranking?.length) partes.push(rankingMunicipio(sel, a));
     else if (sel && atual?.vencedores) partes.push(informacao(`Sem votos registrados em ${sel.nome}.`));
+    else if (!cargoVenc && estado.mun) {
+      const nome = atual?.itens?.find(it => it.id === estado.mun)?.nome;
+      if (nome) partes.push(informacao(`Escolha um cargo acima para ver os mais votados em ${nome}.`));
+    }
     limpar(painel, partes);
   }
 
@@ -500,6 +512,10 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
     // Sem candidato: só o mapa, sem textos repetindo "busque um candidato" e sem o painel lateral
     // (na aba Mapa, dentro de um estado, o painel traz os atalhos do mapa "quem venceu").
     guia.hidden = abrirCidade || !!cand;
+    // Caixa "Cidade": só na aba Mapa, num estado, sem candidato (com candidato, os filtros têm o município).
+    cidade.raiz.hidden = !venc;
+    cidade.definirCidades([]);
+    focarMapa = null;
     lateral.hidden = !cand && !venc;
     layout.classList.toggle('sem-painel', !cand && !venc);
     if (venc) painelVencedores();
@@ -523,6 +539,12 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
       if (!svg) return;
       limpar(area, svg);
       ajuda.hidden = !cand || !svg.classList.contains('mapa-pilha');
+      // Sem candidato: o município escolhido (clique ou caixa "Cidade") tem contorno mesmo sem cargo.
+      if (venc) {
+        atual = { nivel, itens: svg.itens };
+        cidade.definirCidades(svg.itens);
+        if (cidadeBuscada && cidadeBuscada === estado.mun) focarMapa?.(cidadeBuscada);
+      }
       destacarSelecao();
       if (dens?.falha) {
         const e = dens.falha;
@@ -708,6 +730,14 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
     // Depois de arrastar, soltar o botão não conta como clique na área embaixo do cursor.
     el.addEventListener('click', e => { if (moveu) { moveu = false; e.stopPropagation(); } }, true);
 
+    // Aproxima até a caixa b (a cidade buscada): no centro, ocupando ~1/3 da vista, no máximo 8x.
+    function focar(b) {
+      const lado = Math.max(b.w, b.h * (w0 / h0));
+      const w = Math.min(w0, Math.max(lado * 3, w0 / Math.min(8, maximo)));
+      const hh = (w * h0) / w0;
+      animarPara(limitar({ x: b.x0 + b.w / 2 - w / 2, y: b.y0 + b.h / 2 - hh / 2, w }), 450);
+    }
+
     aplicar();
     // Voltando de um nível: começa no lugar de onde se saiu e afasta até o mapa inteiro.
     if (inicial) {
@@ -716,6 +746,82 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
       aplicar();
       animarPara({ x: x0, y: y0, w: w0, h: h0 }, 550);
     }
+    return { focar };
+  }
+
+  // Caixa "Cidade" (aba Mapa, sem candidato): combobox com as cidades do estado, buscando sem acento.
+  // Escolher = o mesmo que clicar no município (contorno e mais votados), e o mapa aproxima dele.
+  function criarBuscaCidade() {
+    const id = `cidade-${instancia}`;
+    let cidades = [], itens = [], ativo = -1;
+    const lista = h('ul', { id: `${id}-lista`, class: 'combo-lista', role: 'listbox', 'aria-label': 'Cidades', hidden: true });
+    const entrada = h('input', {
+      id: `${id}-busca`, class: 'controle controle-busca', type: 'text', autocomplete: 'off', spellcheck: 'false',
+      placeholder: 'Buscar cidade', role: 'combobox', 'aria-expanded': 'false', 'aria-controls': lista.id, 'aria-autocomplete': 'list', maxlength: '60',
+    });
+    const limparBtn = h('button', {
+      type: 'button', class: 'botao-icone mapa-cidade-limpar', 'aria-label': 'Tirar a cidade escolhida', title: 'Tirar a cidade', hidden: true,
+      onclick: () => { entrada.value = ''; cidadeBuscada = ''; definir({ mun: '' }); entrada.focus(); },
+    }, icone('fechar'));
+    const fechar = () => { lista.hidden = true; entrada.setAttribute('aria-expanded', 'false'); entrada.removeAttribute('aria-activedescendant'); ativo = -1; };
+    const nomeEscolhido = () => cidades.find(c => c.id === estado.mun)?.nome || '';
+    const escolher = c => {
+      fechar();
+      entrada.value = c.nome;
+      cidadeBuscada = c.id;
+      if (estado.mun !== c.id) definir({ mun: c.id });
+      focarMapa?.(c.id);
+    };
+    const marcar = i => {
+      ativo = i;
+      [...lista.children].forEach((li, j) => li.setAttribute('aria-selected', String(j === i)));
+      if (lista.children[i]) { lista.children[i].scrollIntoView({ block: 'nearest' }); entrada.setAttribute('aria-activedescendant', lista.children[i].id); }
+    };
+    // Lista: as que começam com o texto primeiro, depois as que o contêm. Vazio = todas.
+    function filtrar() {
+      const q = semAcento(entrada.value.trim());
+      const comeca = [], contem = [];
+      for (const c of cidades) {
+        const n = c.chave.indexOf(q);
+        if (n === 0) comeca.push(c); else if (n > 0) contem.push(c);
+      }
+      itens = [...comeca, ...contem];
+      limpar(lista, itens.length ? itens.map((c, i) => h('li', {
+        id: `${id}-op-${i}`, role: 'option', class: 'combo-item', 'aria-selected': 'false',
+        onmousedown: e => { e.preventDefault(); escolher(c); },
+      }, h('span', { text: c.nome }))) : [h('li', { class: 'combo-vazio', text: 'Nenhuma cidade encontrada.' })]);
+      lista.hidden = false;
+      entrada.setAttribute('aria-expanded', 'true');
+      ativo = -1;
+    }
+    entrada.addEventListener('input', filtrar);
+    entrada.addEventListener('focus', () => { if (cidades.length) { entrada.select(); filtrar(); } });
+    // Saiu da caixa sem escolher: volta a mostrar a cidade escolhida (ou fica vazia).
+    entrada.addEventListener('blur', () => setTimeout(() => { fechar(); entrada.value = nomeEscolhido(); }, 120));
+    entrada.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { fechar(); return; }
+      if (lista.hidden || !itens.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); marcar(Math.min(itens.length - 1, ativo + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); marcar(Math.max(0, ativo - 1)); }
+      else if (e.key === 'Enter') { e.preventDefault(); escolher(itens[Math.max(0, ativo)]); }
+    });
+    const raiz = h('div', { class: 'campo mapa-cidade', hidden: true },
+      h('label', { class: 'campo-rotulo', for: entrada.id, text: 'Cidade' }),
+      h('div', { class: 'combo' }, h('span', { class: 'combo-icone' }, icone('busca')), entrada, lista, limparBtn));
+    return {
+      raiz,
+      // Cidades do mapa desenhado (vazio enquanto carrega: a caixa fica desativada).
+      definirCidades(lista_) {
+        cidades = lista_.map(c => ({ ...c, chave: semAcento(c.nome) })).sort((a, b) => a.chave.localeCompare(b.chave, 'pt-BR'));
+        entrada.disabled = !cidades.length;
+        this.sincronizar();
+      },
+      // Município escolhido mudou (clique no mapa, voltar, outro estado): mostra o nome dele.
+      sincronizar() {
+        limparBtn.hidden = !estado.mun || !nomeEscolhido();
+        if (document.activeElement !== entrada) entrada.value = nomeEscolhido();
+      },
+    };
   }
 
   // Ao aproximar: abre o lugar sob o cursor se ele já ocupa boa parte da vista.
@@ -809,7 +915,7 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
     });
     // Zoom: o estado (ou município, se o estado tem mapa por local) sob o cursor abre sozinho.
     const abreMunicipio = contexto.config.detalhadas.includes(estado.uf);
-    ampliar(el, malha.viewBox, {
+    const zoom = ampliar(el, malha.viewBox, {
       maximo: nacional ? 40 : 120,
       inicial: chegada?.de && dePorId.has(chegada.de) ? caixa(dePorId.get(chegada.de)) : null,
       sair: nacional || voltar.hidden ? null : () => trocarPorZoom({ uf: '' }, estado.uf),
@@ -821,6 +927,7 @@ export function criarPaginaMapa(raiz, { abrirCidade = true } = {}) {
         return true;
       } : null,
     });
+    if (!nacional) focarMapa = id => dePorId.has(id) && zoom.focar(caixa(dePorId.get(id)));
     return Object.assign(el, { itens, areas, escala, vencedores, contagem });
   }
 

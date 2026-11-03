@@ -222,7 +222,8 @@ button, input, select { font: inherit; color: inherit; }
 .heroi h1 { font-size: clamp(2.4rem, 5.6vw, 4rem); line-height: 1.05; }
 /* Título com o logo "lupa no mapa" logo depois do texto; as cores seguem o tema. */
 .titulo-marca { display: inline-flex; align-items: center; gap: .28em; }
-.titulo-logo { width: 1.1em; height: 1.1em; flex: none; }
+/* O centro da caixa da linha fica abaixo do meio das letras: sobe o ícone até o centro das maiúsculas. */
+.titulo-logo { width: 1.1em; height: 1.1em; flex: none; position: relative; top: -.135em; }
 .titulo-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
 .titulo-logo .lg-f2 { fill: var(--logo-2); }
 .heroi-lema { margin: 12px auto 0; max-width: 640px; color: var(--texto-2); font-family: var(--serifa); font-size: 1.22rem; line-height: 1.4; }
@@ -299,12 +300,22 @@ body[data-pagina="sobre"] .heroi-lema, body[data-pagina="mapa"] .heroi-lema { di
 .filtros.filtros-so-busca { max-width: 560px; margin-inline: auto; }
 .filtros-so-busca .filtros-principal { grid-template-columns: minmax(0, 1fr); }
 .filtros-so-busca .filtros-principal > .campo, .filtros-so-busca .filtros-cascata, .filtros-so-busca .filtros-rodape, .filtros-so-busca .filtros-comparar { display: none; }
-/* Comparação: botão "Comparar", a 2ª busca e o chip do 2º candidato, numa linha abaixo da busca. */
-.filtros-comparar { gap: 6px; }
-.filtros-comparar .combo { max-width: 560px; }
-.filtros-comparar .controle-busca { height: 42px; font-size: .95rem; }
-.filtros-comparar .combo-icone { top: 9px; }
-.botao-comparar { border-style: dashed; color: var(--texto-2); }
+/* Candidatos: "Candidato" e "Comparar com" em duas colunas iguais abaixo da busca. Com o mesmo
+   espaçamento da cascata, a divisa cai entre Zona e Bairro; botão, 2ª busca e chips têm a mesma
+   altura (50px), então nada fica desencontrado. */
+.filtros-comparar { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.campo-cand .filtros-busca { gap: 6px; }
+.campo-cand .cand-chip { flex: 1; max-width: none; min-height: 50px; }
+.campo-cand .cand-chip-texto { flex: 1; }
+.campo-cand .controle-busca { height: 50px; font-size: .95rem; }
+.campo-cand .combo-icone { top: 15px; }
+/* Caixa "Cidade" no cabeçalho do mapa (aba Mapa, sem candidato). */
+.mapa-cidade { width: min(300px, 100%); }
+.mapa-cidade .controle-busca { height: 42px; font-size: .95rem; padding-right: 38px; }
+.mapa-cidade .combo-icone { top: 9px; }
+.mapa-cidade .combo-lista { max-height: 300px; }
+.mapa-cidade-limpar { position: absolute; right: 6px; top: 6px; }
+.botao-comparar { flex: 1; min-height: 50px; justify-content: center; border-style: dashed; color: var(--texto-2); }
 .botao-comparar:hover { color: var(--texto); }
 .botao-comparar-mais { font-size: 1.15rem; font-weight: 700; line-height: 1; }
 /* Chip com a cor do candidato na comparação (a mesma dos cartões e do mapa). */
@@ -736,6 +747,9 @@ section.cartao { padding: 18px 20px; }
   .cand-chip { max-width: 100%; flex: 1; }
 }
 @media (max-width: 640px) {
+  .filtros-comparar { grid-template-columns: minmax(0, 1fr); }
+  .campo-cand .filtros-busca { flex-direction: row; align-items: center; }
+  .campo-cand .filtros-busca > .combo { flex: 1; width: auto; }
   .topo-interno, .heroi-interno, .principal, .rodape-interno { width: min(1240px, 100% - 24px); }
   .topo-interno { height: auto; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
   .navegacao { margin-left: 0; width: 100%; justify-content: space-between; order: 2; }
@@ -842,7 +856,7 @@ button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-list
 /* Logo do topo: volta ao início com os filtros limpos. */
 .marca-topo { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); text-decoration: none; font-family: var(--serifa); font-weight: 600; font-size: 1.25rem; border-radius: var(--raio-p); padding: 4px 6px; margin-left: -6px; }
 .marca-topo:hover { background: var(--vidro); }
-.marca-topo-logo { width: 28px; height: 28px; flex: none; transition: transform .25s ease; }
+.marca-topo-logo { width: 28px; height: 28px; flex: none; position: relative; top: -2px; transition: transform .25s ease; }
 .marca-topo:hover .marca-topo-logo { transform: rotate(-12deg) scale(1.08); }
 .marca-topo-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
 .marca-topo-logo .lg-f2 { fill: var(--logo-2); }
