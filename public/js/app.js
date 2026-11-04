@@ -15,7 +15,7 @@ import { criarFiltros, normalizarEstado } from './filtros.js';
 import { criarPaginaResultados } from './paginas/resultados.js';
 import { criarPaginaMapa } from './paginas/mapa.js';
 
-const TITULOS = { resultados: 'Página Inicial', mapa: 'Mapa', sobre: 'Sobre os dados' };
+const TITULOS = { resultados: 'Início', mapa: 'Mapa', sobre: 'Sobre os dados' };
 const paginas = {};
 
 function atualizarNavegacao() {

@@ -2,10 +2,11 @@
    Tema escuro em tons de cinza, azul e neutros. Cada página tem a sua cor de destaque
    (ver "temas por página"). Paleta dos gráficos: paleta de referência validada para o
    fundo escuro (CVD e contraste).
-   Tipografia editorial: Newsreader, serifa de jornal, nos títulos e
-   nomes (peso 600, sem espaçamento negativo); Inter no texto, nos controles e nos números
-   (tabulares, alinhados). As duas ficam em public/fonts (licença OFL, sem CDN: a CSP só permite
-   fontes do próprio site). */
+   Tipografia: Alata no título e no lema do topo (a marca); Cal Sans no menu; Newsreader, serifa
+   de jornal, nos títulos e nomes (peso 600, sem espaçamento negativo); Inter no texto, nos
+   controles e nos números (tabulares, alinhados). Todas ficam em public/fonts (licença OFL, sem
+   CDN: a CSP só permite fontes do próprio site). Cor da marca: verde-água (#00D4C6 no escuro;
+   no claro, o topo é um degradê verde-água com o título em branco). */
 
 @font-face {
   font-family: "Newsreader"; font-style: normal; font-weight: 200 800; font-display: swap;
@@ -14,6 +15,15 @@
 @font-face {
   font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
   src: url("../fonts/inter-latin-wght-normal.woff2") format("woff2");
+}
+/* Alata e Cal Sans têm um peso só (400): sem negrito sintético. */
+@font-face {
+  font-family: "Alata"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/alata-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cal Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/cal-sans-latin-400-normal.woff2") format("woff2");
 }
 
 :root {
@@ -31,8 +41,11 @@
   --vidro: rgba(255, 255, 255, .07);       /* realces translúcidos sobre o fundo */
   --vidro-forte: rgba(255, 255, 255, .14);
   /* cores do logo (lupa: --logo-1, alfinete: --logo-2) */
-  --logo-1: #3b82f6;
+  --logo-1: #00d4c6;
   --logo-2: #d5dbe3;
+  /* Marca: título do topo e item atual do menu. */
+  --marca: #00d4c6;
+  --menu-atual: var(--marca);
   --azul: #8ab4f8;
   --foco: #5b9cf0;
   --erro: #ff8a8a;
@@ -41,14 +54,21 @@
   --sombra-2: 0 12px 30px -12px rgba(0, 0, 0, .7);
   --raio: 8px;
   --raio-p: 6px;
-  /* Destaque da página (padrão: Resultados, azul). */
-  --acento: #2563eb;          /* preenchimentos (botões, números) */
+  /* Destaque da página (padrão: Início, verde-água da marca). */
+  --acento: #0f766e;          /* preenchimentos (botões, números); branco sobre ele: 5,5:1 */
   --acento-tinta: #ffffff;    /* texto sobre --acento */
-  --acento-texto: #8ab4f8;    /* texto e detalhes em destaque sobre o fundo escuro */
+  --acento-texto: #00d4c6;    /* texto e detalhes em destaque sobre o fundo escuro */
   --acento-fundo: color-mix(in srgb, var(--acento) 16%, var(--superficie));
   --heroi-a: #0e1626;
   --heroi-b: #15294d;
   --heroi-brilho: rgba(59, 130, 246, .35);
+  /* Textos do topo (título, lema, chapéu, ilustração) e o logo dentro dele. */
+  --heroi-titulo: var(--marca);
+  --heroi-lema: var(--texto-2);
+  --heroi-sobre: var(--acento-texto);
+  --heroi-arte: var(--acento-texto);
+  --heroi-logo-1: var(--logo-1);
+  --heroi-logo-2: var(--logo-2);
   /* séries (valores do tema escuro da paleta validada) */
   --s1: #3987e5;
   --s1-forte: #6da7ec;
@@ -65,6 +85,8 @@
   --grade: #252a31;
   --serifa: "Newsreader", Georgia, "Times New Roman", serif;
   --fonte: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --fonte-marca: "Alata", var(--fonte);
+  --fonte-menu: "Cal Sans", var(--fonte);
 }
 
 /* ---------------------------------------------------------------- tema claro
@@ -84,20 +106,29 @@
   --topo: #ffffff;
   --vidro: rgba(15, 20, 26, .05);
   --vidro-forte: rgba(15, 20, 26, .08);
-  --logo-1: #1d4ed8;
+  --logo-1: #0d9488;   /* lupa sobre o branco do topo: 3,7:1 */
   --logo-2: #1f2937;
+  --marca: #0f766e;
+  --menu-atual: var(--texto);
   --azul: #1d4ed8;
   --foco: #2a78d6;
   --erro: #b42323;
   --erro-fundo: #fdf0f0;
   --sombra-1: 0 1px 2px rgba(15, 20, 26, .06), 0 1px 1px rgba(15, 20, 26, .04);
   --sombra-2: 0 10px 30px -12px rgba(15, 20, 26, .18), 0 2px 6px rgba(15, 20, 26, .05);
-  --acento: #2563eb;
+  --acento: #0f766e;
   --acento-tinta: #ffffff;
-  --acento-texto: #1d4ed8;
-  --heroi-a: #edf2fb;
-  --heroi-b: #d6e2f7;
-  --heroi-brilho: rgba(37, 99, 235, .16);
+  --acento-texto: #0f766e;   /* 5,5:1 sobre o branco */
+  /* Topo do Início: degradê verde-água, título branco e lema verde-claro. */
+  --heroi-a: #0fa69d;
+  --heroi-b: #076761;
+  --heroi-brilho: rgba(255, 255, 255, .10);
+  --heroi-titulo: #ffffff;
+  --heroi-lema: #b8ffea;
+  --heroi-sobre: #ffffff;
+  --heroi-arte: #b8ffea;
+  --heroi-logo-1: #00d4c6;
+  --heroi-logo-2: #ffffff;
   /* séries (valores do tema claro da paleta validada) */
   --s1: #2a78d6;
   --s1-forte: #1c5cab;
@@ -114,6 +145,10 @@
 :root[data-tema="claro"] body[data-pagina="sobre"] {
   --acento: #3b5fa8; --acento-tinta: #ffffff; --acento-texto: #2f4f8f;
   --heroi-a: #eef2f8; --heroi-b: #d9e2ee; --heroi-brilho: rgba(59, 95, 168, .14);
+}
+:root[data-tema="claro"] body[data-pagina="mapa"], :root[data-tema="claro"] body[data-pagina="sobre"] {
+  --heroi-titulo: var(--texto); --heroi-lema: var(--texto-2); --heroi-sobre: var(--acento-texto); --heroi-arte: var(--acento-texto);
+  --heroi-logo-1: var(--logo-1); --heroi-logo-2: var(--logo-2);
 }
 
 /* ---------------------------------------------------------------- temas por página */
@@ -185,7 +220,7 @@ button, input, select { font: inherit; color: inherit; }
 /* Seções como num jornal: caixa-alta pequena, a atual sublinhada na cor da página. */
 .navegacao a {
   display: flex; align-items: center; color: var(--texto-2); text-decoration: none;
-  font-weight: 650; font-size: .76rem; letter-spacing: .1em; text-transform: uppercase;
+  font-family: var(--fonte-menu); font-weight: 400; font-size: 1rem; letter-spacing: .06em; text-transform: uppercase;
   padding: 0 12px; border-bottom: 3px solid transparent; border-top: 3px solid transparent;
   transition: color .15s, border-color .15s;
 }
@@ -201,7 +236,7 @@ button, input, select { font: inherit; color: inherit; }
 .tema-botao .icone-sol { display: none; }
 :root[data-tema="claro"] .tema-botao .icone-sol { display: block; }
 :root[data-tema="claro"] .tema-botao .icone-lua { display: none; }
-.navegacao a[aria-current="page"] { color: var(--texto); border-bottom-color: var(--acento-texto); }
+.navegacao a[aria-current="page"] { color: var(--menu-atual); border-bottom-color: var(--acento-texto); }
 
 .heroi {
   background:
@@ -215,18 +250,18 @@ button, input, select { font: inherit; color: inherit; }
 /* Chapéu entre dois fios, título em serifa grande, linha fina e a linha de edição. */
 .heroi-sobre {
   display: flex; align-items: center; gap: 14px; max-width: 420px; margin: 0 auto 10px;
-  font-size: .74rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--acento-texto);
+  font-size: .74rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--heroi-sobre);
 }
 .heroi-sobre::before, .heroi-sobre::after { content: ""; flex: 1; border-top: 1px solid currentColor; opacity: .5; }
 .heroi-interno { text-align: center; }
-.heroi h1 { font-size: clamp(2.4rem, 5.6vw, 4rem); line-height: 1.05; }
+.heroi h1 { font-family: var(--fonte-marca); font-weight: 400; color: var(--heroi-titulo); font-size: clamp(2.4rem, 5.6vw, 4rem); line-height: 1.05; }
 /* Título com o logo "lupa no mapa" logo depois do texto; as cores seguem o tema. */
 .titulo-marca { display: inline-flex; align-items: center; gap: .28em; }
-/* O centro da caixa da linha fica abaixo do meio das letras: sobe o ícone até o centro das maiúsculas. */
-.titulo-logo { width: 1.1em; height: 1.1em; flex: none; position: relative; top: -.135em; }
-.titulo-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
-.titulo-logo .lg-f2 { fill: var(--logo-2); }
-.heroi-lema { margin: 12px auto 0; max-width: 640px; color: var(--texto-2); font-family: var(--serifa); font-size: 1.22rem; line-height: 1.4; }
+/* Com a Alata, o centro da linha já coincide com o meio das maiúsculas: o ícone fica centrado sem ajuste. */
+.titulo-logo { width: 1.1em; height: 1.1em; flex: none; }
+.titulo-logo .lg-s1 { fill: none; stroke: var(--heroi-logo-1); }
+.titulo-logo .lg-f2 { fill: var(--heroi-logo-2); }
+.heroi-lema { margin: 12px auto 0; max-width: 640px; color: var(--heroi-lema); font-family: var(--fonte-marca); font-size: 1.22rem; line-height: 1.4; }
 /* Página inicial (só a busca): ilustração em traço dos cartões-postais do Brasil atrás da busca,
    que fica um pouco mais abaixo. As linhas se desenham (stroke-dashoffset, com pathLength="1" em
    cada traço) e se redesenham a cada 1 minuto (o ciclo da animação tem 60 s: ~2,4 s desenhando e
@@ -235,7 +270,7 @@ button, input, select { font: inherit; color: inherit; }
 .heroi-interno { position: relative; z-index: 1; }
 .heroi-arte {
   display: none; position: absolute; left: 50%; bottom: 0; width: min(1240px, 100%); height: auto;
-  transform: translateX(-50%); pointer-events: none; color: var(--acento-texto); opacity: .42;
+  transform: translateX(-50%); pointer-events: none; color: var(--heroi-arte); opacity: .42;
 }
 body[data-pagina="resultados"]:has(.filtros-so-busca) .heroi { padding-bottom: 196px; }
 body[data-pagina="resultados"]:has(.filtros-so-busca) .heroi-arte { display: block; }
@@ -754,7 +789,7 @@ section.cartao { padding: 18px 20px; }
   .topo-interno { height: auto; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
   .navegacao { margin-left: 0; width: 100%; justify-content: space-between; order: 2; }
   .tema-botao { margin-left: auto; order: 1; width: 40px; height: 40px; }
-  .navegacao a { padding: 7px 6px; flex: 1 1 auto; white-space: nowrap; justify-content: center; font-size: .72rem; }
+  .navegacao a { padding: 7px 6px; flex: 1 1 auto; white-space: nowrap; justify-content: center; font-size: .88rem; }
   .heroi { padding: 22px 0 84px; }
   .filtros { padding: 14px; }
   .filtros-cascata { grid-template-columns: repeat(2, minmax(0, 1fr)); }

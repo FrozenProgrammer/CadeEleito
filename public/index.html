@@ -20,7 +20,9 @@
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
   <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="css/app.css">
-  <!-- Fontes do próprio site (licença OFL): Newsreader nos títulos, Inter no texto. -->
+  <!-- Fontes do próprio site (licença OFL): Alata no título do topo, Cal Sans no menu, Newsreader nos títulos, Inter no texto. -->
+  <link rel="preload" href="fonts/alata-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/cal-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <!-- Aplica o tema salvo (claro/escuro) antes de desenhar a página, sem piscar. -->
@@ -54,7 +56,7 @@
         <span>Cadê o eleito?</span>
       </a>
       <nav class="navegacao" aria-label="Páginas">
-        <a data-pagina="resultados" href="#/resultados">Página Inicial</a>
+        <a data-pagina="resultados" href="#/resultados">Início</a>
         <a data-pagina="mapa" href="#/mapa">Mapa</a>
         <a data-pagina="sobre" href="#/sobre">Sobre</a>
       </nav>
@@ -143,7 +145,7 @@
     </noscript>
     <section id="filtros" class="filtros cartao" aria-label="Filtros"></section>
 
-    <section id="pagina-resultados" class="pagina" aria-label="Página Inicial"></section>
+    <section id="pagina-resultados" class="pagina" aria-label="Início"></section>
     <section id="pagina-mapa" class="pagina" aria-label="Mapa" hidden></section>
 
     <section id="pagina-sobre" class="pagina" aria-label="Sobre os dados" hidden>

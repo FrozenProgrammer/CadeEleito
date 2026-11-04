@@ -188,6 +188,7 @@ await caso('Sem candidato: só a busca (sem cargo, turno, cascata, cartão ou ma
 await caso('Busca pelo teclado: Enter escolhe o primeiro e libera estado, município… (sem cargo)', async () => {
   await abrir('#/resultados', { primeiraVisita: true });
   const [, nome] = candSp;
+  verificar(await aguardar('document.querySelector("#cand-busca")', 10000), 'a busca de candidato não apareceu');
   await avaliar(`const e = document.querySelector('#cand-busca'); e.focus(); e.value = ${JSON.stringify(nome.toLowerCase())}; e.dispatchEvent(new Event('input')); return 1`);
   verificar(await aguardar('!document.querySelector("#cand-lista").hidden && document.querySelector("#cand-lista .combo-item")'), 'lista de sugestões não abriu');
   // Foto oficial ao lado do número em cada sugestão (carregada do próprio site).
@@ -634,12 +635,12 @@ await caso('Logo do topo: volta ao início com todos os filtros limpos', async (
   verificar(await avaliar('return /início/i.test(document.querySelector("#inicio").title) && document.querySelector("#inicio").textContent.includes("Cadê o eleito?")'), 'logo sem nome acessível');
 });
 
-await caso('Página Gráficos foi removida: link antigo abre a Página Inicial e o menu não a lista', async () => {
+await caso('Página Gráficos foi removida: link antigo abre o Início e o menu não a lista', async () => {
   await abrir('#/graficos?cargo=senador&uf=SP');
   verificar(await avaliar('return !document.querySelector("[data-pagina=graficos], #pagina-graficos") && !document.querySelector("#pagina-resultados").hidden'), 'Gráficos ainda existe');
 });
 
-await caso('Página Typography foi removida: link antigo abre a Página Inicial e o menu não a lista', async () => {
+await caso('Página Typography foi removida: link antigo abre o Início e o menu não a lista', async () => {
   await abrir('#/tipografia');
   verificar(await avaliar('return !document.querySelector("[data-pagina=tipografia], #pagina-tipografia") && !document.querySelector("#pagina-resultados").hidden'), 'Typography ainda existe');
   verificar(await avaliar('return [...document.styleSheets].every(f => !/tipografia/.test(f.href || ""))'), 'css/tipografia.css ainda é carregado');
