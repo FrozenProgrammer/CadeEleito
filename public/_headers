@@ -26,6 +26,6 @@
 /img/*
   Cache-Control: public, max-age=604800
 
-# Fontes (Alata, Cal Sans, Newsreader e Inter, licença OFL): mudam raramente.
+# Fontes (Alata, Cal Sans e Inter, licença OFL): mudam raramente.
 /fonts/*
   Cache-Control: public, max-age=2592000

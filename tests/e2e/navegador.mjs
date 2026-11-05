@@ -211,19 +211,24 @@ await caso('Limpar filtros: volta só à busca, sem cargo e com a caixa pequena'
   verificar(await avaliar('return !document.querySelector(".cartao-social")'), 'cartão continuou na tela');
 });
 
-await caso('Cartão do candidato: números coerentes, selo, local da pesquisa e compartilhamento', async () => {
+await caso('Cartão do candidato: números coerentes, situação, cores do partido, local da pesquisa e compartilhamento', async () => {
   const [id] = candSp;
   await abrir(`#/resultados?cand=${id}&uf=SP&mun=${capitalSp.cd}`);
-  verificar(await aguardar('document.querySelector(".cartao-social .social-metricas")'), 'cartão do candidato não apareceu');
+  verificar(await aguardar('document.querySelector(".cartao-social .social-votos")'), 'cartão do candidato não apareceu');
   verificar(await avaliar('return !document.querySelector(".kpi, .kpis, td.col-pct, .cand-celula")'), 'tabela geral/indicadores ainda aparecem');
-  const m = await avaliar('return [...document.querySelectorAll(".social-metrica strong")].map(s => s.textContent)');
+  const m = await avaliar('return [document.querySelector(".social-votos-num").textContent, document.querySelector(".social-pct").textContent, ...[...document.querySelectorAll(".social-caixa strong")].map(s => s.textContent)]');
   const p = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
   verificar(p >= 0 && p <= 100, `percentual fora de 0–100: ${m[1]}`);
+  verificar(/^\d+º lugar$/.test(m[2]) && /^[−+]/.test(m[3]), `colocação/distância inesperadas: ${JSON.stringify(m)}`);
+  // Cores do partido: faixa em duas metades, moldura da foto e número com contraste de texto.
+  const cores = await avaliar(`const c = document.querySelector('.cartao-social'), cs = getComputedStyle(c), n = getComputedStyle(c.querySelector('.social-num'));
+    return { p1: cs.getPropertyValue('--p1'), faixa: getComputedStyle(c.querySelector('.social-faixa')).backgroundImage, fundo: n.backgroundColor, cor: n.color };`);
+  verificar(/^#[0-9a-f]{6}$/i.test(cores.p1.trim()) && /linear-gradient/.test(cores.faixa) && cores.fundo !== cores.cor, `cores do partido ausentes: ${JSON.stringify(cores)}`);
   const local = await avaliar('return document.querySelector(".social-local strong").textContent');
   verificar(/São Paulo › /.test(local), `local da pesquisa ausente no cartão: ${local}`);
-  // Selo "Eleito" só quando a situação começa com "Eleito" (nunca "Não eleito"/"Suplente").
-  const { selo, situacao } = await avaliar('return { selo: !!document.querySelector(".cartao-social .selo-eleito"), situacao: document.querySelector(".social-nome p")?.textContent || "" }');
-  verificar(selo === /^eleit/i.test(situacao), `selo incoerente com "${situacao}"`);
+  // Etiqueta verde ("eleito") só quando a situação começa com "Eleito" (nunca "Não eleito"/"Suplente").
+  const { verde, situacao } = await avaliar('const e = document.querySelector(".cartao-social .social-status"); return { verde: !!e?.classList.contains("status-eleito"), situacao: e?.textContent || "" }');
+  verificar(verde === /^eleit/i.test(situacao), `etiqueta incoerente com "${situacao}"`);
   // Links das redes levam o endereço deste recorte (candidato + município).
   const links = await avaliar('return [...document.querySelectorAll(".compartilhar a")].map(a => ({ href: a.href, alvo: a.target, rel: a.rel }))');
   verificar(links.length === 3, `esperados X, WhatsApp e Facebook: ${links.length}`);
@@ -232,13 +237,15 @@ await caso('Cartão do candidato: números coerentes, selo, local da pesquisa e 
     verificar(decodeURIComponent(l.href).includes(`cand=${id}`) && decodeURIComponent(l.href).includes(`mun=${capitalSp.cd}`), `link sem o recorte: ${l.href}`);
     verificar(l.alvo === '_blank' && /noopener/.test(l.rel) && /noreferrer/.test(l.rel), 'link externo sem noopener/noreferrer');
   }
-  // Foto do candidato à direita no cartão.
+  // Foto do candidato à esquerda no cartão, com moldura na cor do partido.
   verificar(await aguardar('(i => i && i.complete && i.naturalWidth > 0)(document.querySelector(".cartao-social img.social-foto"))'), 'cartão sem a foto do candidato');
-  verificar(await avaliar('const f = document.querySelector(".social-foto").getBoundingClientRect(), n = document.querySelector(".social-nome").getBoundingClientRect(); return f.left >= n.right - 1'), 'a foto deveria ficar à direita do nome');
+  verificar(await avaliar('const f = document.querySelector(".social-foto").getBoundingClientRect(), n = document.querySelector(".social-nome").getBoundingClientRect(); return f.right <= n.left + 1'), 'a foto deveria ficar à esquerda do nome');
   // Imagem para Instagram: 1080 × 1080, com a foto, desenhada sem erro (canvas exportável = foto da mesma origem).
-  const img = await avaliar(`const m = await import('./js/compartilhar.js');
-    const cv = await m.desenharImagem({ foto: 'img/c/${id}.jpg', nome: 'Maria Antônia de Albuquerque Cavalcanti Pernambucano', numero: '12345', partido: 'PARTIDO', cargo: 'Deputado Federal', uf: 'SP', eleito: true,
-      local: 'São Paulo › São José do Rio Preto › Zona 123 › Bairro Jardim das Flores Muito Comprido', votos: 1234567, percentual: 12.34, posicao: 3, total: 1200, turno: 1 });
+  const img = await avaliar(`const m = await import('./js/compartilhar.js'); const { paletaCartao } = await import('./js/partidos.js');
+    const cv = await m.desenharImagem({ foto: 'img/c/${id}.jpg', nome: 'Maria Antônia de Albuquerque Cavalcanti Pernambucano', numero: '12345', partido: 'MISSÃO', cargo: 'Deputada Federal', uf: 'SP',
+      situacao: 'Eleita', tipoSituacao: 'eleito', cores: paletaCartao('MISSÃO'), dominio: 'cadeoeleito.com.br',
+      local: 'São Paulo › São José do Rio Preto › Zona 123 › Bairro Jardim das Flores Muito Comprido', votos: 1234567, percentual: 12.34, posicao: 3, total: 1200, turno: 1,
+      colocacao: { rotulo: 'Colocação', valor: '3º lugar', detalhe: 'de 1.200 candidatos' }, distancia: { rotulo: 'Distância para o 1º', valor: '−716,9 mil votos', detalhe: 'atrás de Fulano de Tal' } });
     const url = cv.toDataURL('image/png');
     return { w: cv.width, h: cv.height, tam: url.length, url };`);
   verificar(img.w === 1080 && img.h === 1080 && img.tam > 20000, `imagem inválida: ${img.w}×${img.h}, ${img.tam}`);
@@ -255,13 +262,13 @@ await caso('Gênero: textos concordam com a pessoa (Erika Hilton: Deputada Feder
     return { ela: ela && [ela.id, ela.uf, ela.genero], ele: ele && [ele.id, ele.uf, ele.genero] };`);
   verificar(ids.ela?.[2] === 'F' && ids.ele?.[2] === 'M', `gênero ausente nos dados: ${JSON.stringify(ids)}`);
   await abrir(`#/resultados?cand=${ids.ela[0]}&uf=${ids.ela[1]}`);
-  verificar(await aguardar('document.querySelector(".cartao-social .destaque-sobre")', 12000), 'cartão da candidata não apareceu');
-  const ela = await avaliar('return { sobre: document.querySelector(".destaque-sobre").textContent, selo: document.querySelector(".selo-eleito")?.textContent || "", sit: document.querySelector(".social-nome p")?.textContent || "", chip: document.querySelector(".cand-chip small").textContent }');
-  verificar(/Deputada Federal/.test(ela.sobre) && ela.selo === 'Eleita' && /^Eleita/.test(ela.sit) && !/Eleito/.test(ela.sit), `textos da candidata: ${JSON.stringify(ela)}`);
+  verificar(await aguardar('document.querySelector(".cartao-social .social-sobre")', 12000), 'cartão da candidata não apareceu');
+  const ela = await avaliar('return { sobre: document.querySelector(".social-sobre").textContent, sit: document.querySelector(".social-status")?.textContent || "", chip: document.querySelector(".cand-chip small").textContent }');
+  verificar(/Deputada Federal/.test(ela.sobre) && /^Eleita/.test(ela.sit) && !/Eleito/.test(ela.sit), `textos da candidata: ${JSON.stringify(ela)}`);
   await abrir(`#/resultados?cand=${ids.ele[0]}&uf=${ids.ele[1]}`);
-  verificar(await aguardar('document.querySelector(".cartao-social .destaque-sobre")', 12000), 'cartão do candidato não apareceu');
-  const ele = await avaliar('return { sobre: document.querySelector(".destaque-sobre").textContent, selo: document.querySelector(".selo-eleito")?.textContent || "" }');
-  verificar(/Governador\b/.test(ele.sobre) && !/Governadora/.test(ele.sobre) && ele.selo === 'Eleito', `textos do candidato: ${JSON.stringify(ele)}`);
+  verificar(await aguardar('document.querySelector(".cartao-social .social-sobre")', 12000), 'cartão do candidato não apareceu');
+  const ele = await avaliar('return { sobre: document.querySelector(".social-sobre").textContent, sit: document.querySelector(".social-status")?.textContent || "" }');
+  verificar(/Governador\b/.test(ele.sobre) && !/Governadora/.test(ele.sobre) && /^Eleito/.test(ele.sit), `textos do candidato: ${JSON.stringify(ele)}`);
 });
 
 await caso('Troca de candidato: mesmo estado mantém os filtros; outro estado recomeça no estado dele', async () => {
@@ -347,6 +354,7 @@ await caso('Mapa sem candidato: Brasil sem painel; no estado, atalhos de cargo, 
   await avaliar(`window.__carregou = null; new MutationObserver(() => { const c = document.querySelector('#pagina-mapa .mapa-carregando'); if (c && !window.__carregou) window.__carregou = { altura: c.getBoundingClientRect().height, texto: c.textContent }; }).observe(document.querySelector('#pagina-mapa'), { childList: true, subtree: true }); return 1`);
   await avaliar('const p = [...document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao")].find(a => /^São Paulo/.test(a.getAttribute("aria-label"))); p.dispatchEvent(new MouseEvent("click", { bubbles: true })); return 1');
   verificar(await aguardar('document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao").length > 600 && document.querySelectorAll("#pagina-mapa .chip-cargo").length >= 4', 15000), 'estado sem os atalhos de cargo');
+  verificar(await avaliar('return [...document.querySelectorAll("#pagina-mapa .chip-cargo")].map(b => b.textContent).join() === "Presidente,Governador,Senador,Dep. Federal,Dep. Estadual"'), 'atalhos de cargo deveriam ser Presidente, Governador, Senador, Dep. Federal e Dep. Estadual');
   const carregou = await avaliar('return window.__carregou');
   verificar(carregou && carregou.altura >= 200 && /Carregando o mapa de São Paulo/.test(carregou.texto), `indicador de carregamento ausente ou encolhido: ${JSON.stringify(carregou)}`);
   verificar(await avaliar('return [...document.querySelectorAll("#pagina-mapa .mapa-svg path.mapa-regiao")].every(p => p.classList.contains("mapa-neutro")) && !document.querySelector("#pagina-mapa .mapa-painel").hidden'), 'antes de escolher o cargo o mapa fica neutro, com o painel visível');

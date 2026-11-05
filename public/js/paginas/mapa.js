@@ -133,7 +133,7 @@ function classeDuelo(a, topo) {
 }
 
 // Atalhos de cargo do mapa "quem venceu" (só os que existem na UF: Distrital só no DF).
-const ROTULO_CURTO = { presidente: 'Presidente', governador: 'Governador', deputado_federal: 'Dep. Federal', deputado_estadual: 'Dep. Estadual', deputado_distrital: 'Dep. Distrital' };
+const ROTULO_CURTO = { presidente: 'Presidente', governador: 'Governador', senador: 'Senador', deputado_federal: 'Dep. Federal', deputado_estadual: 'Dep. Estadual', deputado_distrital: 'Dep. Distrital' };
 function cargosRapidos(uf) {
   return contexto.config.cargos.filter(c => ROTULO_CURTO[c.id] && (!c.somente || c.somente.includes(uf)) && (!c.exceto || !c.exceto.includes(uf)));
 }

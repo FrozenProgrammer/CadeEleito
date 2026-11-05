@@ -2,16 +2,12 @@
    Tema escuro em tons de cinza, azul e neutros. Cada página tem a sua cor de destaque
    (ver "temas por página"). Paleta dos gráficos: paleta de referência validada para o
    fundo escuro (CVD e contraste).
-   Tipografia: Alata no título e no lema do topo (a marca); Cal Sans no menu; Newsreader, serifa
-   de jornal, nos títulos e nomes (peso 600, sem espaçamento negativo); Inter no texto, nos
-   controles e nos números (tabulares, alinhados). Todas ficam em public/fonts (licença OFL, sem
+   Tipografia: Alata no título do topo, nos títulos e nos nomes ("Cadê o eleito?" em 600; os
+   demais em 400, o único peso da fonte); Cal Sans no menu; Inter no texto, nos controles e nos
+   números (tabulares, alinhados). Todas ficam em public/fonts (licença OFL, sem
    CDN: a CSP só permite fontes do próprio site). Cor da marca: verde-água (#00D4C6 no escuro;
    no claro, o topo é um degradê verde-água com o título em branco). */
 
-@font-face {
-  font-family: "Newsreader"; font-style: normal; font-weight: 200 800; font-display: swap;
-  src: url("../fonts/newsreader-latin-wght-normal.woff2") format("woff2");
-}
 @font-face {
   font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
   src: url("../fonts/inter-latin-wght-normal.woff2") format("woff2");
@@ -83,7 +79,7 @@
   --c1: .75; --c2: .85; --c3: .95; --c4: 1; --c5: 1; --c6: .9; --c7: .75; --c8: .6; --c9: .45;
   --s-nd: #4b515b;   /* sem dados (área sem votação publicada) */
   --grade: #252a31;
-  --serifa: "Newsreader", Georgia, "Times New Roman", serif;
+  --serifa: "Alata", "Segoe UI", system-ui, sans-serif;   /* títulos e nomes */
   --fonte: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --fonte-marca: "Alata", var(--fonte);
   --fonte-menu: "Cal Sans", var(--fonte);
@@ -186,7 +182,7 @@ body {
   display: flex;
   flex-direction: column;
 }
-h1, h2, h3 { margin: 0; font-family: var(--serifa); font-weight: 600; letter-spacing: 0; line-height: 1.15; }
+h1, h2, h3 { margin: 0; font-family: var(--serifa); font-weight: 400; letter-spacing: 0; line-height: 1.15; }
 h2 { font-size: 1.6rem; }
 h3 { font-size: 1.15rem; }
 p { margin: 0; }
@@ -254,7 +250,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .heroi-sobre::before, .heroi-sobre::after { content: ""; flex: 1; border-top: 1px solid currentColor; opacity: .5; }
 .heroi-interno { text-align: center; }
-.heroi h1 { font-family: var(--fonte-marca); font-weight: 400; color: var(--heroi-titulo); font-size: clamp(2.4rem, 5.6vw, 4rem); line-height: 1.05; }
+.heroi h1 { font-family: var(--fonte-marca); font-weight: 600; color: var(--heroi-titulo); font-size: clamp(2.4rem, 5.6vw, 4rem); line-height: 1.05; }
 /* Título com o logo "lupa no mapa" logo depois do texto; as cores seguem o tema. */
 .titulo-marca { display: inline-flex; align-items: center; gap: .28em; }
 /* Com a Alata, o centro da linha já coincide com o meio das maiúsculas: o ícone fica centrado sem ajuste. */
@@ -452,48 +448,73 @@ h3 .selo-eleito { vertical-align: middle; margin-left: 10px; }
 
 
 /* ---------------------------------------------------------------- cartão do candidato
-   Pensado para print e compartilhamento: marca, candidato, recorte (onde) e números. */
+   Pensado para print e compartilhamento (a imagem do Instagram, em js/compartilhar.js, tem o
+   mesmo desenho): faixa nas duas cores do partido (--p1 | --p2, js/partidos.js), marca, foto com
+   moldura do partido, número nas cores dele, nome, situação, votos com barra e dois quadros. */
 
 .cartao-social {
-  display: grid; gap: 18px; padding: 26px 28px; border-radius: var(--raio);
-  width: 100%; max-width: 760px; margin-inline: auto; color: var(--texto);
-  background:
-    radial-gradient(600px 240px at 90% -20%, var(--heroi-brilho), transparent 60%),
-    linear-gradient(135deg, var(--heroi-a), var(--heroi-b));
-  border: 1px solid var(--borda-forte); border-top: 4px solid var(--acento-texto); box-shadow: var(--sombra-2);
+  --cartao-fundo: #0f1a2e; --cartao-painel: #1a2742; --cartao-fio: rgba(255, 255, 255, .14); --trilho-neutro: #2b3a57;
+  position: relative; overflow: hidden;
+  display: grid; gap: 16px; padding: 30px 24px 18px; border-radius: 14px;
+  width: 100%; max-width: 540px; margin-inline: auto; color: var(--texto);
+  background: var(--cartao-fundo); border: 1px solid var(--borda); box-shadow: var(--sombra-2);
 }
-.social-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--borda-forte); }
-.social-marca { display: inline-flex; align-items: center; gap: 8px; font-family: var(--serifa); font-weight: 600; font-size: 1.25rem; }
-.social-logo { width: 28px; height: 28px; flex: none; }
+:root[data-tema="claro"] .cartao-social { --cartao-fundo: #f4f8fb; --cartao-painel: #e3e8ee; --cartao-fio: #cfd6de; --trilho-neutro: #c9d1da; }
+.social-faixa { position: absolute; inset: 0 0 auto 0; height: 8px; background: linear-gradient(90deg, var(--p1) 50%, var(--faixa-2, var(--p2)) 50%); }
+:root[data-tema="claro"] .social-faixa { --faixa-2: var(--p2-claro, var(--p2)); }
+.social-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--cartao-fio); }
+.social-marca { display: inline-flex; align-items: center; gap: 8px; font-family: var(--fonte-marca); font-weight: 600; font-size: 1.15rem; }
+.social-logo { width: 26px; height: 26px; flex: none; }
 .social-logo .lg-s1 { fill: none; stroke: var(--logo-1); }
 .social-logo .lg-f2 { fill: var(--logo-2); }
-.social-eleicao { font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--acento-texto); }
-.social-cand { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center; }
-.destaque-num { font-size: 1.6rem; font-weight: 700; background: var(--vidro-forte); border-radius: var(--raio-p); padding: 12px 16px; font-variant-numeric: tabular-nums; }
-.destaque-sobre { font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-2); font-weight: 650; }
-.social-nome h3 { font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.05; margin: 4px 0; overflow-wrap: anywhere; }
-.social-nome p { color: var(--texto-2); font-size: .9rem; }
-.social-local { display: flex; gap: 10px; align-items: flex-start; border-left: 3px solid var(--acento-texto); padding: 4px 0 4px 14px; }
-.social-local > .icone { color: var(--acento-texto); margin-top: 2px; flex: none; }
-.social-local > div { display: grid; gap: 2px; min-width: 0; }
-.social-rotulo { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-2); }
-.social-local strong { font-family: var(--serifa); font-size: 1.2rem; font-weight: 600; overflow-wrap: anywhere; }
-.social-local small { color: var(--texto-2); font-size: .82rem; }
-/* Números em destaque como num infográfico de jornal: fio em cima, número grande, legenda curta. */
-.social-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 22px; }
-.social-metrica { border-top: 2px solid var(--texto); padding: 10px 0 2px; display: grid; gap: 2px; align-content: start; }
-.social-metrica strong { font-size: 1.8rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.social-metrica span { font-size: .78rem; color: var(--texto-2); }
-.social-fonte { font-size: .74rem; color: var(--texto-2); padding-top: 10px; border-top: 1px solid var(--borda-forte); }
+.social-eleicao { font-size: .72rem; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--texto-2); }
+.social-cand { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; }
+.social-ident { display: grid; gap: 8px; min-width: 0; }
+.social-sobre { font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--texto-2); overflow-wrap: anywhere; }
+.social-sobre strong { color: var(--texto); font-weight: 750; }
+.social-local strong { font-weight: inherit; color: inherit; }
+.social-endereco { font-size: .8rem; color: var(--texto-2); margin-top: -4px; }
+.social-nome { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.social-num {
+  flex: none; display: grid; place-items: center; min-width: 58px; height: 58px; padding: 0 10px; border-radius: 10px;
+  background: var(--num-fundo); color: var(--num-texto); font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.social-nome h3 { font-size: clamp(1.5rem, 3.4vw, 1.9rem); line-height: 1.08; overflow-wrap: anywhere; }
+/* Situação: cor de status sempre com o texto (e a bolinha), nunca só a cor. */
+.social-status {
+  --st-fundo: rgba(255, 255, 255, .1); --st-texto: #cbd2dc; --st-bola: #8a93a0;
+  justify-self: end; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: .7rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; background: var(--st-fundo); color: var(--st-texto);
+}
+.social-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--st-bola); }
+.status-eleito { --st-fundo: rgba(34, 197, 94, .18); --st-texto: #86efac; --st-bola: #22c55e; }
+.status-nao { --st-fundo: rgba(239, 68, 68, .2); --st-texto: #fca5a5; --st-bola: #ef4444; }
+.status-segundo { --st-fundo: rgba(234, 179, 8, .18); --st-texto: #fde68a; --st-bola: #eab308; }
+:root[data-tema="claro"] .social-status { --st-fundo: #e5e7eb; --st-texto: #374151; --st-bola: #6b7280; }
+:root[data-tema="claro"] .status-eleito { --st-fundo: #dcfce7; --st-texto: #166534; --st-bola: #16a34a; }
+:root[data-tema="claro"] .status-nao { --st-fundo: #fde2e2; --st-texto: #b42323; --st-bola: #dc2626; }
+:root[data-tema="claro"] .status-segundo { --st-fundo: #fef3c7; --st-texto: #92400e; --st-bola: #d97706; }
+.social-rotulo { font-size: .72rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--texto-2); }
+.social-votos { display: grid; gap: 10px; background: var(--cartao-painel); border-radius: 12px; padding: 14px 16px; }
+.social-votos-linha { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.social-votos-num { display: block; font-size: 1.9rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.social-pct { font-size: 1.35rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* Barra: % dos votos válidos na 1ª cor do partido; o trilho é a 2ª cor quando ela é escura. */
+.social-barra { height: 8px; border-radius: 999px; background: var(--trilho, var(--trilho-neutro)); overflow: hidden; }
+.social-barra span { display: block; height: 100%; width: calc(var(--pct, 0) * 100%); min-width: 8px; border-radius: inherit; background: var(--barra-escuro, var(--p1)); }
+:root[data-tema="claro"] .social-barra span { background: var(--barra-claro, var(--p1)); }
+.social-caixas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.social-caixa { display: grid; gap: 4px; align-content: start; min-width: 0; background: var(--cartao-painel); border-radius: 12px; padding: 14px 16px; }
+.social-caixa strong { font-size: 1.45rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.social-detalhe { font-size: .88rem; color: var(--texto-2); }
+.social-rodape { display: flex; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--cartao-fio); font-size: .8rem; color: var(--texto-2); }
 .compartilhar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; width: 100%; max-width: 760px; margin-inline: auto; }
 /* Comparação: dois cartões lado a lado (um embaixo do outro em telas estreitas). O fio de cima de
    cada cartão tem a cor do candidato no mapa do duelo. */
 .comparacao { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
 .comparacao-item { display: grid; gap: 12px; min-width: 0; align-content: start; }
-.comparacao-item .cartao-social { max-width: none; border-top: 6px solid var(--lado); padding: 22px 22px; }
-.comparacao .social-nome h3 { font-size: clamp(1.4rem, 2.3vw, 1.9rem); }
-.comparacao .social-cand { gap: 12px; }
-.comparacao .destaque-num { font-size: 1.3rem; padding: 10px 12px; }
+.comparacao-item .cartao-social { max-width: none; }
+.comparacao .social-nome h3 { font-size: clamp(1.3rem, 2.1vw, 1.7rem); }
 .comparacao-nota { display: flex; margin: 0; gap: 8px; align-items: flex-start; font-size: .84rem; color: var(--texto-2); background: var(--superficie-2); border: 1px solid var(--borda); border-radius: var(--raio-p); padding: 8px 12px; }
 .comparacao-nota .icone { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--acento-texto); }
 .comparacao-resumo { text-align: center; font-size: .95rem; color: var(--texto-2); }
@@ -841,12 +862,16 @@ button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-list
 }
 @media (max-width: 640px) {
   .mapa-zoom-botao { width: 40px; height: 40px; }
-  .cartao-social { padding: 18px 16px; gap: 14px; }
-  .social-cand { gap: 10px; }
-  .social-foto { width: 64px; height: 86px; border-radius: 12px; }
-  .destaque-num { font-size: 1.25rem; padding: 10px 12px; }
-  .social-metricas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .social-metrica strong { font-size: 1.25rem; }
+  .cartao-social { padding: 26px 16px 16px; gap: 14px; }
+  .social-cand { gap: 12px; }
+  .social-foto { width: 72px; height: 96px; }
+  .social-num { min-width: 46px; height: 46px; font-size: 1.3rem; padding: 0 8px; }
+  .social-nome h3 { font-size: 1.35rem; }
+  .social-votos-num { font-size: 1.5rem; }
+  .social-pct { font-size: 1.1rem; }
+  .social-caixa { padding: 12px; }
+  .social-caixa strong { font-size: 1.05rem; }
+  .social-detalhe { font-size: .8rem; }
 }
 
 /* ---------------------------------------------------------------- fotos dos candidatos (TSE) */
@@ -854,7 +879,7 @@ button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-list
 .combo-foto, .cand-chip-foto, .social-foto { flex: none; object-fit: cover; object-position: center 20%; background: var(--superficie-3); }
 .combo-foto { width: 34px; height: 44px; border-radius: 7px; }
 .cand-chip-foto { width: 30px; height: 38px; border-radius: 7px; }
-.social-foto { width: 108px; height: 144px; border-radius: var(--raio); border: 2px solid var(--vidro-forte); box-shadow: var(--sombra-2); }
+.social-foto { width: 96px; height: 128px; border-radius: 12px; border: 3px solid var(--p1, var(--vidro-forte)); }
 .foto-vazia { display: inline-grid; place-items: center; font-weight: 800; color: var(--texto-3); font-size: .78rem; letter-spacing: .02em; }
 .social-foto.foto-vazia { font-size: 1.8rem; }
 
@@ -889,7 +914,7 @@ button, summary, .navegacao, .segmentado, .campo-rotulo, .cand-chip, .combo-list
 @keyframes subir { from { opacity: 0; transform: translateY(8px); } }
 
 /* Logo do topo: volta ao início com os filtros limpos. */
-.marca-topo { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); text-decoration: none; font-family: var(--serifa); font-weight: 600; font-size: 1.25rem; border-radius: var(--raio-p); padding: 4px 6px; margin-left: -6px; }
+.marca-topo { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); text-decoration: none; font-family: var(--fonte-marca); font-weight: 600; font-size: 1.25rem; border-radius: var(--raio-p); padding: 4px 6px; margin-left: -6px; }
 .marca-topo:hover { background: var(--vidro); }
 .marca-topo-logo { width: 28px; height: 28px; flex: none; position: relative; top: -2px; transition: transform .25s ease; }
 .marca-topo:hover .marca-topo-logo { transform: rotate(-12deg) scale(1.08); }
